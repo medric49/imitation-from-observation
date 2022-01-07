@@ -2,4 +2,4 @@ defaults:
   - medium
   - _self_
 
-task_name: finger_turn_hard
+task_name: pendulum_bring_ball
