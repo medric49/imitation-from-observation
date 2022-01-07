@@ -2,4 +2,4 @@ defaults:
   - medium
   - _self_
 
-task_name: pendulum_bring_ball
+task_name: manipulator_bring_ball
