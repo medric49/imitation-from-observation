@@ -46,9 +46,12 @@ agent:
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
 
+exp_group: ${now:%Y.%m.%d}
+exp_id: ${now:%H%M%S}
+
 hydra:
   run:
-    dir: ./exp_local/${now:%Y.%m.%d}/${now:%H%M%S}_${hydra.job.override_dirname}
+    dir: ./exp_local/${exp_group}/${exp_id}
   sweep:
     dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
     subdir: ${hydra.job.num}
