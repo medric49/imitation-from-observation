@@ -9,7 +9,7 @@ which allow us to build a dataset of video that is used to train an imitator age
 <p align="center">
 <img src="demo/demo-expert.gif" width="500">
 <br>
-Expert's training in DM Control's Manipulator domain
+Expert training in DM Control's Manipulator domain
 </p>
 
 ## Installation
