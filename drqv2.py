@@ -2,8 +2,6 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
-import hydra
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -260,3 +258,9 @@ class DrQV2Agent:
                                  self.critic_target_tau)
 
         return metrics
+
+    @staticmethod
+    def load(file):
+        with open(file, 'rb') as f:
+            payload = torch.load(f)
+        return payload['agent']
