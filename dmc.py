@@ -10,6 +10,7 @@ import numpy as np
 from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
+from hydra.utils import to_absolute_path
 
 
 class ExtendedTimeStep(NamedTuple):
@@ -177,7 +178,7 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed):
+def make(name, frame_stack, action_repeat, seed, xml_path=None):
     domain, task = name.split('_', 1)
     # overwrite cup to ball_in_cup
     domain = dict(cup='ball_in_cup').get(domain, domain)
@@ -192,6 +193,10 @@ def make(name, frame_stack, action_repeat, seed):
         name = f'{domain}_{task}_vision'
         env = manipulation.load(name, seed=seed)
         pixels_key = 'front_close'
+
+    if xml_path is not None:
+        env.physics.reload_from_xml_path(to_absolute_path(xml_path))
+
     # add wrappers
     env = ActionDTypeWrapper(env, np.float32)
     env = ActionRepeatWrapper(env, action_repeat)
