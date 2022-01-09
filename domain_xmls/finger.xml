@@ -21,8 +21,14 @@
     <light name="light" directional="true" diffuse=".6 .6 .6" pos="0 0 2" specular=".3 .3 .3"/>
     <geom name="ground" type="plane" pos="0 0 0" size=".6 .2 10" material="grid"/>
     <camera name="cam0" pos="0 -1 .8" xyaxes="1 0 0 0 1 2"/>
-    <camera name="cam1" pos="0 -1 .4" xyaxes="1 0 0 0 0 1" />
-    <camera name="cam2" pos="0 0 1.2" xyaxes="1 0 0 0 1 0" />
+    <camera name="cam1" pos="0 -1 .4" xyaxes="1 0 0 0 0 1"/>
+
+    <camera name="cam2" pos=".8 -.8 .7" xyaxes=".3 0 -.8 .8 .8 0"/>
+    <camera name="cam3" pos="-.8 -.8 .7" xyaxes=".8 -.8 0 .3 0 .8"/>
+    <camera name="cam4" pos="0 .8 0" xyaxes="-.8 0 0 -.5 .4 .8"/>
+    <camera name="cam5" pos="0 .8 .8" xyaxes="-.8 0 0 -.5 -.4 .8"/>
+    <camera name="cam6" pos="-.8 .8 .4" xyaxes="0 0 1 .8 .8 0"/>
+
 
     <body name="proximal" pos="-.2 0 .4" childclass="finger">
       <geom name="proximal_decoration" type="cylinder" fromto="0 -.033 0 0 .033 0" size=".034" material="decoration"/>
