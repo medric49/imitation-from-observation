@@ -5,6 +5,7 @@
 import random
 import re
 import time
+import io
 
 import numpy as np
 import torch
@@ -147,3 +148,19 @@ def schedule(schdl, step):
                 mix = np.clip((step - duration1) / duration2, 0.0, 1.0)
                 return (1.0 - mix) * final1 + mix * final2
     raise NotImplementedError(schdl)
+
+
+
+def save_episode(episode, fn):
+    with io.BytesIO() as bs:
+        np.savez_compressed(bs, **episode)
+        bs.seek(0)
+        with fn.open('wb') as f:
+            f.write(bs.read())
+
+
+def load_episode(fn):
+    with fn.open('rb') as f:
+        episode = np.load(f)
+        episode = {k: episode[k] for k in episode.keys()}
+        return episode

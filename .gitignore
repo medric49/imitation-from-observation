@@ -1,6 +1,7 @@
 .idea
 __pycache__
 exp_local
+videos
 
 
 *.ipynb
