@@ -24,8 +24,3 @@ class VideoDataset(torch.utils.data.IterableDataset):
         video_2 = np.load(videos_2)[cam2]
         yield video_1, video_2
 
-
-if __name__ == '__main__':
-    dataset = VideoDataset('videos/finger/train')
-    print('ici')
-    print(next(iter(dataset))[0].shape )

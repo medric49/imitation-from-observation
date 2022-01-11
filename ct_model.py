@@ -1,0 +1,96 @@
+import torch
+from torch import nn
+
+
+class CTNet(nn.Module):
+    def __init__(self, lr):
+        super(CTNet, self).__init__()
+
+        self.enc1 = EncoderNet()
+        self.enc2 = EncoderNet()
+        self.t = TranslatorNet()
+        self.dec = DecoderNet()
+
+        self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
+        self._enc2_opt = torch.optim.Adam(self.enc2.parameters(), lr=lr)
+        self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
+        self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
+
+    def forward(self, ob1, ob2):
+        z1, _, _, _, _ = self.enc1(ob1)
+        z2, c1, c2, c3, c4 = self.enc2(ob2)
+        z3 = self.t(z1, z2)
+        obs3 = self.dec(z3, c1, c2, c3, c4)
+        return obs3, z1, z2, z3
+
+
+class EncoderNet(nn.Module):
+    def __init__(self):
+        super(EncoderNet, self).__init__()
+        self.leaky_relu = nn.LeakyReLU(negative_slope=0.2)
+        self.flatten = nn.Flatten()
+        self.conv_1 = nn.Conv2d(3, 64, kernel_size=5, stride=2)
+        self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
+        self.conv_3 = nn.Conv2d(128, 256, kernel_size=5, stride=2)
+        self.conv_4 = nn.Conv2d(256, 512, kernel_size=5, stride=2)
+        self.fc1 = nn.Linear(512, 1024)
+        self.fc2 = nn.Linear(1024, 1024)
+
+    def forward(self, obs):
+        c1 = self.leaky_relu(self.conv_1(obs))
+        c2 = self.leaky_relu(self.conv_2(c1))
+        c3 = self.leaky_relu(self.conv_3(c2))
+        c4 = self.leaky_relu(self.conv_4(c2))
+        z = self.flatten(c4)
+        z = self.leaky_relu(self.fc1(z))
+        z = self.leaky_relu(self.fc2(z))
+        return z, c1, c2, c3, c4
+
+
+class TranslatorNet(nn.Module):
+    def __init__(self):
+        super(TranslatorNet, self).__init__()
+        self.translator = nn.Linear(1024 * 2, 1024)
+
+    def forward(self, z1, z2):
+        z = torch.cat([z1, z2], dim=1)
+        z = self.translator(z)
+        return z
+
+
+class DecoderNet(nn.Module):
+    def __init__(self):
+        super(DecoderNet, self).__init__()
+        self.leaky_relu = nn.LeakyReLU(negative_slope=0.2)
+
+        self.d_fc = nn.Linear(1024, 512)
+
+        self.conn_4 = nn.Conv2d(1024, 512, kernel_size=1, stride=1)
+        self.d_conv_4 = nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2)
+
+        self.conn_3 = nn.Conv2d(512, 256, kernel_size=1, stride=1)
+        self.d_conv_3 = nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2)
+
+        self.conn_2 = nn.Conv2d(256, 128, kernel_size=1, stride=1)
+        self.d_conv_2 = nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2)
+
+        self.conn_1 = nn.Conv2d(128, 64, kernel_size=1, stride=1)
+        self.d_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2)
+
+    def forward(self, z, c1, c2, c3, c4):
+        z = self.leaky_relu(self.d_fc(z))
+        d4 = torch.unsqueeze(z, dim=1)
+
+        d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
+        d3 = self.leaky_relu(self.d_conv_4(d4))
+
+        d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
+        d2 = self.leaky_relu(self.d_conv_3(d3))
+
+        d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
+        d1 = self.leaky_relu(self.d_conv_2(d2))
+
+        d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
+        obs = self.leaky_relu(self.d_conv_1(d1))
+        return obs
+

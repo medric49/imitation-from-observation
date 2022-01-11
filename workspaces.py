@@ -188,3 +188,14 @@ class Workspace:
             payload = torch.load(f)
         for k, v in payload.items():
             self.__dict__[k] = v
+
+
+class CTWorkspace:
+    def __init__(self, cfg):
+        self.work_dir = Path.cwd()
+        print(f'workspace: {self.work_dir}')
+
+        self.cfg = cfg
+        utils.set_seed_everywhere(cfg.seed)
+        self.device = torch.device(cfg.device)
+

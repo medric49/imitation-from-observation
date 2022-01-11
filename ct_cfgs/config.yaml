@@ -1,0 +1,23 @@
+defaults:
+  - _self_
+
+seed: 1
+device: cuda
+
+exp_group: ${now:%Y.%m.%d}
+exp_id: ${now:%H%M%S}
+
+hydra:
+  run:
+    dir: ./ct_exp_local/${exp_group}/${exp_id}
+  sweep:
+    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+    subdir: ${hydra.job.num}
+  launcher:
+    timeout_min: 4300
+    cpus_per_task: 10
+    gpus_per_node: 1
+    tasks_per_node: 1
+    mem_gb: 160
+    nodes: 1
+    submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
