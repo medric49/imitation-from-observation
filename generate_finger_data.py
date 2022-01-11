@@ -23,10 +23,10 @@ if __name__ == '__main__':
         return action
 
 
-    im_w, im_h = 224, 224
+    im_w, im_h = 64, 64
     env = dmc.make('finger_spin', frame_stack=3, action_repeat=2, seed=1, xml_path='domain_xmls/finger.xml')
     with torch.no_grad():
-        for i in tqdm(range(250)):
+        for i in tqdm(range(200)):
             cam2 = []
             cam3 = []
             cam4 = []
@@ -50,12 +50,5 @@ if __name__ == '__main__':
                 cam5.append(env.physics.render(im_w, im_h, camera_id=5))
                 cam6.append(env.physics.render(im_w, im_h, camera_id=6))
 
-            videos = {
-                'cam2': np.array(cam2, dtype=np.uint8),
-                'cam3': np.array(cam3, dtype=np.uint8),
-                'cam4': np.array(cam4, dtype=np.uint8),
-                'cam5': np.array(cam5, dtype=np.uint8),
-                'cam6': np.array(cam6, dtype=np.uint8),
-            }
-
-            utils.save_episode(videos, video_dir / f'{i}.npz')
+            videos = np.array([cam2, cam3, cam4, cam5, cam6], dtype=np.uint8)
+            np.save(video_dir / f'{i}', videos)
