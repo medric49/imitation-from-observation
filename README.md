@@ -1,4 +1,4 @@
-# sharingan
+# Imitation from Observation
 
 This project aims to train an agent to imitate an expert performing a task and observed through a video.
 The first step is to train an agent using a Deep RL algorithm. 
