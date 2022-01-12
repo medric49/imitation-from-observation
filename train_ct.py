@@ -1,10 +1,12 @@
+import warnings
+warnings.filterwarnings('ignore', category=DeprecationWarning)
+
 import hydra
-import torch
 from pathlib import Path
 from workspaces import CTWorkspace as W
 
 
-@hydra.main(config_path='cfgs_ct', config_name='config')
+@hydra.main(config_path='ct_cfgs', config_name='config')
 def main(cfg):
     root_dir = Path.cwd()
     workspace = W(cfg)
@@ -13,3 +15,7 @@ def main(cfg):
         print(f'resuming: {snapshot}')
         workspace.load_snapshot()
     workspace.train()
+
+
+if __name__ == '__main__':
+    main()

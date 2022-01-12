@@ -55,4 +55,4 @@ if __name__ == '__main__':
         for i in tqdm(range(800)):
             make_video(i, video_dir / 'train')
         for i in tqdm(range(200)):
-            make_video(i, video_dir / 'train')
+            make_video(i, video_dir / 'valid')

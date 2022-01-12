@@ -1,9 +1,15 @@
 from pathlib import Path
+import random
+
 import hydra
 import numpy as np
 import torch
+import torch.utils.data
 from dm_env import specs
+from hydra.utils import to_absolute_path
 
+import ct_model
+import datasets
 import dmc
 import utils
 from logger import Logger
@@ -11,7 +17,13 @@ from replay_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 
 
-def make_agent(obs_spec, action_spec, cfg):
+def _worker_init_fn(worker_id):
+    seed = np.random.get_state()[1][0] + worker_id
+    np.random.seed(seed)
+    random.seed(seed)
+
+
+def _make_agent(obs_spec, action_spec, cfg):
     cfg.obs_shape = obs_spec.shape
     cfg.action_shape = action_spec.shape
     return hydra.utils.instantiate(cfg)
@@ -27,9 +39,10 @@ class Workspace:
         self.device = torch.device(cfg.device)
         self.setup()
 
-        self.agent = make_agent(self.train_env.observation_spec(),
-                                self.train_env.action_spec(),
-                                self.cfg.agent)
+        self.agent = _make_agent(self.train_env.observation_spec(),
+                                 self.train_env.action_spec(),
+                                 self.cfg.agent)
+
         self.timer = utils.Timer()
         self._global_step = 0
         self._global_episode = 0
@@ -197,5 +210,50 @@ class CTWorkspace:
 
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
-        self.device = torch.device(cfg.device)
 
+        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model).to(utils.device())
+
+        self.dataset = datasets.VideoDataset(to_absolute_path(self.cfg.train_finger_video_dir), self.cfg.episode_len)
+        self.dataloader = torch.utils.data.DataLoader(
+            self.dataset,
+            batch_size=self.cfg.batch_size,
+            num_workers=self.cfg.num_workers,
+            worker_init_fn=_worker_init_fn,
+        )
+        self.dataloader_iter = iter(self.dataloader)
+
+        self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
+
+        self._epoch = 0
+
+    def train(self):
+        train_until_epoch = utils.Until(self.cfg.num_epochs)
+
+        while train_until_epoch(self._epoch):
+            video1, video2 = next(self.dataloader_iter)
+            video1 = video1.to(device=utils.device())
+            video2 = video2.to(device=utils.device())
+            metrics = self.context_translator.update(video1, video2)
+
+            self.logger.log_metrics(metrics, self._epoch, 'train')
+
+            print(f'E: {self._epoch+1}', end='\t| ')
+            for k, v in metrics.items():
+                print(f'{k}: {v}', end='\t| ')
+            print('')
+
+            self._epoch += 1
+
+    def save_snapshot(self):
+        snapshot = self.work_dir / 'snapshot.pt'
+        keys_to_save = ['context_translator', '_epoch']
+        payload = {k: self.__dict__[k] for k in keys_to_save}
+        with snapshot.open('wb') as f:
+            torch.save(payload, f)
+
+    def load_snapshot(self):
+        snapshot = self.work_dir / 'snapshot.pt'
+        with snapshot.open('rb') as f:
+            payload = torch.load(f)
+        for k, v in payload.items():
+            self.__dict__[k] = v

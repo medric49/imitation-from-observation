@@ -2,7 +2,7 @@
 __pycache__
 exp_local
 videos
-
+ct_exp_local
 
 *.ipynb
 !*_example.ipynb

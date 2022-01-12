@@ -164,3 +164,7 @@ def load_episode(fn):
         episode = np.load(f)
         episode = {k: episode[k] for k in episode.keys()}
         return episode
+
+
+def device():
+    return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
