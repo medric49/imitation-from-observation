@@ -26,29 +26,24 @@ class CTNet(nn.Module):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # T x c x h x w
-        fobs2 = fobs2.to(dtype=torch.float).repeat(T, 1) / 255. - 0.5  # T x c x h x w
+        fobs2 = fobs2.to(dtype=torch.float).repeat(T, 1, 1, 1) / 255. - 0.5  # T x c x h x w
 
         z1, _, _, _, _ = self.enc1(video1)
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
         z3 = self.t(z1, fz2)
+        z3[0] = fz2[0]
 
         if return_state:
             return z3
 
         video2 = self.dec(z3, c1, c2, c3, c4)  # T x c x h x w
+        video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
         return video2
 
-    def update(self, video1, video2):
-        metrics = dict()
-
-        self._enc1_opt.zero_grad()
-        self._enc2_opt.zero_grad()
-        self._t_opt.zero_grad()
-        self._dec_opt.zero_grad()
-
+    def evaluate(self, video1, video2):
         T = video1.shape[0]
-        
+
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
         video2 = video2.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
 
@@ -60,22 +55,35 @@ class CTNet(nn.Module):
         l_trans = 0
         l_rec = 0
         l_align = 0
-        
+
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
         for t in range(T):
             obs1 = video1[t]  # n x c x h x w
             obs2 = video2[t]  # n x c x h x w
-            
+
             z1, _, _, _, _ = self.enc1(obs1)
             z3 = self.t(z1, fz2)
             p_obs2 = self.dec(z3, c1, c2, c3, c4)  # n x c x h x w
             z2, _, _, _, _ = self.enc1(obs2)
 
             l_trans += F.mse_loss(torch.flatten(p_obs2, start_dim=1), torch.flatten(obs2, start_dim=1))
-            l_rec += F.mse_loss(torch.flatten(self.dec(z2, c1, c2, c3, c4), start_dim=1), torch.flatten(obs2, start_dim=1))
+            l_rec += F.mse_loss(torch.flatten(self.dec(z2, c1, c2, c3, c4), start_dim=1),
+                                torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
-        
+
         loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2
+
+        return loss, l_trans, l_rec, l_align
+
+    def update(self, video1, video2):
+        metrics = dict()
+
+        self._enc1_opt.zero_grad()
+        self._enc2_opt.zero_grad()
+        self._t_opt.zero_grad()
+        self._dec_opt.zero_grad()
+
+        loss, l_trans, l_rec, l_align = self.evaluate(video1, video2)
         
         loss.backward()
         

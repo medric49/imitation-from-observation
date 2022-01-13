@@ -2,9 +2,12 @@
 #
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
+from pathlib import Path
+
 import cv2
 import imageio
 import numpy as np
+from hydra.utils import to_absolute_path
 
 
 class VideoRecorder:
@@ -68,3 +71,11 @@ class TrainVideoRecorder:
         if self.enabled:
             path = self.save_dir / file_name
             imageio.mimsave(str(path), self.frames, fps=self.fps)
+
+
+def make_video_from_frames(file, frames, fps=20):
+    frames = frames.astype(np.uint8).transpose(0, 2, 3, 1)
+    frames = list(frames)
+    file = Path(to_absolute_path(file))
+    file.parent.mkdir(exist_ok=True)
+    imageio.mimsave(file, frames, fps=fps)

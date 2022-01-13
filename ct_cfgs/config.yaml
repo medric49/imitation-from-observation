@@ -7,12 +7,15 @@ exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
 
 num_epochs: 10000
+eval_every_epochs: 10
+num_evaluations: 5
 batch_size: 20
 episode_len: 100
 num_workers: 4
 
 train_finger_video_dir: 'videos/finger/train'
 valid_finger_video_dir: 'videos/finger/valid'
+
 
 use_tb: true
 
