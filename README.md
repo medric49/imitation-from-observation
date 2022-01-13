@@ -24,7 +24,7 @@ With this dataset, we train a context translator which imagines next frames in a
 
 
 
-## Installation
+## Setup
 
 * Install the environment
 ```shell
@@ -32,12 +32,23 @@ conda env create -f env.yml
 conda activate sharingan
 ```
 
-* Train the expert
+* Train the expert (Optional, a trained expert is provided in `experts/finger_span.pt` )
 ```shell
 python train.py
 ```
 
-* Watch training evolution in Tensorboard
+* Generate videos of expert acting in the environment
+```shell
+python generate_finger_data.py
+```
+The data are stored in `videos/finger`
+
+* Train the context translator
+```shell
+python train_ct.py
+```
+
+* Watch training in Tensorboard
 ```shell
 tensorboard --logdir exp_local
 ```
