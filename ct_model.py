@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -63,10 +65,10 @@ class CTNet(nn.Module):
 
             z1, _, _, _, _ = self.enc1(obs1)
             z3 = self.t(z1, fz2)
-            p_obs2 = self.dec(z3, c1, c2, c3, c4)  # n x c x h x w
             z2, _, _, _, _ = self.enc1(obs2)
 
-            l_trans += F.mse_loss(torch.flatten(p_obs2, start_dim=1), torch.flatten(obs2, start_dim=1))
+            l_trans += F.mse_loss(torch.flatten(self.dec(z3, c1, c2, c3, c4), start_dim=1),
+                                  torch.flatten(obs2, start_dim=1))
             l_rec += F.mse_loss(torch.flatten(self.dec(z2, c1, c2, c3, c4), start_dim=1),
                                 torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
@@ -99,7 +101,14 @@ class CTNet(nn.Module):
             metrics['align_loss'] = l_align.item()
 
         return metrics
-        
+
+    @staticmethod
+    def load(file):
+        snapshot = Path(file)
+        with snapshot.open('rb') as f:
+            payload = torch.load(f)
+        return payload['context_translator']
+
             
 class EncoderNet(nn.Module):
     def __init__(self, hidden_dim):
@@ -107,18 +116,23 @@ class EncoderNet(nn.Module):
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2)
         self.flatten = nn.Flatten()
         self.conv_1 = nn.Conv2d(3, 64, kernel_size=5, stride=2)
+        self.b_norm_1 = nn.BatchNorm2d(64)
         self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
+        self.b_norm_2 = nn.BatchNorm2d(128)
         self.conv_3 = nn.Conv2d(128, 256, kernel_size=5, stride=2)
+        self.b_norm_3 = nn.BatchNorm2d(256)
         self.conv_4 = nn.Conv2d(256, 512, kernel_size=5, stride=2)
+        self.b_norm_4 = nn.BatchNorm2d(512)
         self.fc1 = nn.Conv2d(512, hidden_dim, kernel_size=1)
+        self.b_norm_fc_1 = nn.BatchNorm2d(hidden_dim)
         self.fc2 = nn.Conv2d(hidden_dim, hidden_dim, kernel_size=1)
 
     def forward(self, obs):
-        c1 = self.leaky_relu(self.conv_1(obs))
-        c2 = self.leaky_relu(self.conv_2(c1))
-        c3 = self.leaky_relu(self.conv_3(c2))
-        c4 = self.leaky_relu(self.conv_4(c3))
-        z = self.leaky_relu(self.fc1(c4))
+        c1 = self.leaky_relu(self.b_norm_1(self.conv_1(obs)))
+        c2 = self.leaky_relu(self.b_norm_2(self.conv_2(c1)))
+        c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
+        c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
+        z = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
         z = self.leaky_relu(self.fc2(z))
         z = z.view(z.shape[0], z.shape[1])
         return z, c1, c2, c3, c4
@@ -141,33 +155,37 @@ class DecoderNet(nn.Module):
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2)
 
         self.fc = nn.Conv2d(hidden_dim, 512, kernel_size=1)
-
+        self.b_norm_fc = nn.BatchNorm2d(512)
         self.conn_4 = nn.Conv2d(512 * 2, 512, kernel_size=1, stride=1)
-        self.d_conv_4 = nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2)
 
-        self.conn_3 = nn.Conv2d(512, 256, kernel_size=1, stride=1)
-        self.d_conv_3 = nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2)
+        self.t_conv_4 = nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2)
+        self.b_norm_4 = nn.BatchNorm2d(256)
+        self.conn_3 = nn.Conv2d(256 * 2, 256, kernel_size=1, stride=1)
 
-        self.conn_2 = nn.Conv2d(256, 128, kernel_size=1, stride=1)
-        self.d_conv_2 = nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, output_padding=1)
+        self.t_conv_3 = nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2)
+        self.b_norm_3 = nn.BatchNorm2d(128)
+        self.conn_2 = nn.Conv2d(128 * 2, 128, kernel_size=1, stride=1)
 
-        self.conn_1 = nn.Conv2d(128, 64, kernel_size=1, stride=1)
-        self.d_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
+        self.t_conv_2 = nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, output_padding=1)
+        self.b_norm_2 = nn.BatchNorm2d(64)
+        self.conn_1 = nn.Conv2d(64 * 2, 64, kernel_size=1, stride=1)
+
+        self.t_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
 
     def forward(self, z, c1, c2, c3, c4):
         z = z.view(z.shape[0], z.shape[1], 1, 1)
-        d4 = self.leaky_relu(self.fc(z))
-
+        d4 = self.leaky_relu(self.b_norm_fc(self.fc(z)))
         d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
-        d3 = self.leaky_relu(self.d_conv_4(d4))
 
+        d3 = self.leaky_relu(self.b_norm_4(self.t_conv_4(d4)))
         d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
-        d2 = self.leaky_relu(self.d_conv_3(d3))
 
+        d2 = self.leaky_relu(self.b_norm_3(self.t_conv_3(d3)))
         d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
-        d1 = self.leaky_relu(self.d_conv_2(d2))
 
+        d1 = self.leaky_relu(self.b_norm_2(self.t_conv_2(d2)))
         d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
-        obs = self.leaky_relu(self.d_conv_1(d1))
+
+        obs = self.leaky_relu(self.t_conv_1(d1))
         return obs
 

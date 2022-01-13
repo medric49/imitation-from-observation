@@ -7,7 +7,6 @@ from pathlib import Path
 import cv2
 import imageio
 import numpy as np
-from hydra.utils import to_absolute_path
 
 
 class VideoRecorder:
@@ -76,6 +75,6 @@ class TrainVideoRecorder:
 def make_video_from_frames(file, frames, fps=20):
     frames = frames.astype(np.uint8).transpose(0, 2, 3, 1)
     frames = list(frames)
-    file = Path(to_absolute_path(file))
+    file = Path(file)
     file.parent.mkdir(exist_ok=True)
     imageio.mimsave(file, frames, fps=fps)

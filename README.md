@@ -7,10 +7,22 @@ We use the algorithm [DrQv2](https://arxiv.org/abs/2107.09645) to train the expe
 which allow us to build a dataset of video that is used to train an imitator agent with [Imitation from Observation](https://arxiv.org/abs/1707.03374) algorithm.
 
 <p align="center">
-<img src="demo/demo-expert.gif" width="500">
+<img src="demo/demo-expert.gif" width="300">
 <br>
-Expert training in DM Control's Manipulator domain
+Expert training in DM Control's Finger domain
 </p>
+
+With this dataset, we train a context translator which imagines next frames in a viewpoint based on a first frame in this viewpoint and observations of frames from another viewpoint.
+<p align="center">
+<img src="demo/source.gif" width="200">
+<img src="demo/fobs.png" width="200">
+<img src="demo/predict.gif" width="200">
+<img src="demo/target.gif" width="200">
+<br>
+(1) Source video. (2) Target video first frame. (3) Predicted target video. (4) Target video.
+</p>
+
+
 
 ## Installation
 

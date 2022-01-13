@@ -31,8 +31,3 @@ class VideoDataset(torch.utils.data.IterableDataset):
     def __iter__(self) -> Iterator[T_co]:
         while True:
             yield self._sample()
-
-
-if __name__ == '__main__':
-    dataset = VideoDataset('videos/finger/train', 100)
-    print(next(iter(dataset))[0].shape)

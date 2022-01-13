@@ -17,7 +17,6 @@ from logger import Logger
 from replay_buffer import ReplayBufferStorage, make_replay_loader
 from video import TrainVideoRecorder, VideoRecorder
 
-import cv2
 
 def _worker_init_fn(worker_id):
     seed = np.random.get_state()[1][0] + worker_id
