@@ -1,4 +1,4 @@
-numpy==1.18.1
+numpy==1.19.2
 torch
 torchvision
 torchtext
