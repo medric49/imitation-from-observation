@@ -39,7 +39,7 @@ python train.py
 
 * Generate videos of expert acting in the environment
 ```shell
-python generate_finger_data.py
+python generate_finger_span_expert_video.py
 ```
 The data are stored in `videos/finger`
 
