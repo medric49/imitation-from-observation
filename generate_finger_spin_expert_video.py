@@ -13,10 +13,10 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 
 if __name__ == '__main__':
-    video_dir = Path('videos/finger')
+    video_dir = Path('videos/finger_spin')
     video_dir.mkdir(parents=True, exist_ok=False)
 
-    agent = DrQV2Agent.load('experts/finger_span.pt')
+    agent = DrQV2Agent.load('experts/finger_spin.pt')
     agent.train(training=False)
 
     im_w, im_h = 64, 64

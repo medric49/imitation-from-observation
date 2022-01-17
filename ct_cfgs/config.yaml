@@ -13,8 +13,8 @@ batch_size: 16
 episode_len: 100
 num_workers: 4
 
-train_finger_video_dir: 'videos/finger/train'
-valid_finger_video_dir: 'videos/finger/valid'
+train_finger_video_dir: 'videos/finger_spin/train'
+valid_finger_video_dir: 'videos/finger_spin/valid'
 
 
 use_tb: true
