@@ -1,4 +1,8 @@
 numpy==1.18.1
+torch
+torchvision
+torchtext
+torchaudio
 tb-nightly
 pyparsing
 hydra-core
