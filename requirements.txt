@@ -1,0 +1,17 @@
+numpy==1.18.1
+tb-nightly
+pyparsing
+hydra-core
+scikit-image
+dm-env
+jupyterlab
+hydra-submitit-launcher
+pandas
+tdqm
+absl-py
+mujoco_py
+dm_control
+opencv-python
+imageio
+imageio-ffmpeg
+      
