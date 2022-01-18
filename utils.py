@@ -5,15 +5,17 @@
 import random
 import re
 import time
-import io
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from omegaconf import OmegaConf
 from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
+from tqdm import tqdm
+
+import dmc
+from drqv2 import DrQV2Agent
 
 
 class eval_mode:
@@ -150,21 +152,47 @@ def schedule(schdl, step):
     raise NotImplementedError(schdl)
 
 
-
-def save_episode(episode, fn):
-    with io.BytesIO() as bs:
-        np.savez_compressed(bs, **episode)
-        bs.seek(0)
-        with fn.open('wb') as f:
-            f.write(bs.read())
-
-
-def load_episode(fn):
-    with fn.open('rb') as f:
-        episode = np.load(f)
-        episode = {k: episode[k] for k in episode.keys()}
-        return episode
-
-
 def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
+def generate_video_from_expert(root_dir, expert_file, task, num_train=800, num_valid=200, xml_path=None):
+    root_dir = Path(root_dir)
+    root_dir.mkdir(parents=True, exist_ok=False)
+
+    agent = DrQV2Agent.load(expert_file)
+    agent.train(training=False)
+
+    im_w, im_h = 64, 64
+    env = dmc.make(task, frame_stack=3, action_repeat=2, seed=2, xml_path=xml_path)
+
+    def act(time_step):
+        action = agent.act(time_step.observation, 1, eval_mode=True)
+        return action
+
+    def make_video(index, parent_dir):
+        cameras = {2: [], 3: [], 4: [], 5: [], 6: []}
+        time_step = env.reset()
+
+        for cam_id, cam in cameras.items():
+            cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+
+        while not time_step.last():
+            action = act(time_step)
+            time_step = env.step(action)
+
+            for cam_id, cam in cameras.items():
+                cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+
+        videos = np.array(list(cameras.values()), dtype=np.uint8)
+        np.save(parent_dir / f'{index}', videos)
+
+    with torch.no_grad():
+        video_dir = root_dir / 'train'
+        video_dir.mkdir(parents=True)
+        for i in tqdm(range(num_train)):
+            make_video(i, video_dir)
+        video_dir = root_dir / 'valid'
+        video_dir.mkdir(parents=True)
+        for i in tqdm(range(num_valid)):
+            make_video(i, video_dir)
