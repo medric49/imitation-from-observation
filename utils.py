@@ -156,7 +156,7 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert_file, task, num_train=800, num_valid=200, xml_path=None):
+def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_train=800, num_valid=200, xml_path=None):
     root_dir = Path(root_dir)
     root_dir.mkdir(parents=True, exist_ok=False)
 
@@ -171,7 +171,8 @@ def generate_video_from_expert(root_dir, expert_file, task, num_train=800, num_v
         return action
 
     def make_video(index, parent_dir):
-        cameras = {2: [], 3: [], 4: [], 5: [], 6: []}
+        cameras = {id: [] for id in cam_ids}
+
         time_step = env.reset()
 
         for cam_id, cam in cameras.items():
