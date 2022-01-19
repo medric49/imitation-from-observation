@@ -1,0 +1,2 @@
+train_video_dir: 'videos/finger_turn_easy/train'
+valid_video_dir: 'videos/finger_turn_easy/valid'

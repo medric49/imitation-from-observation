@@ -10,11 +10,12 @@ import utils
 
 
 class VideoDataset(torch.utils.data.IterableDataset):
-    def __init__(self, root, episode_len):
+    def __init__(self, root, episode_len, same_video=False):
         self._root = Path(root)
         self._files = list(self._root.iterdir())
 
         self._episode_len = episode_len
+        self._same_video = same_video
 
     def _sample(self):
         cam1, cam2 = random.sample([0, 1, 2, 3], k=2)
@@ -22,7 +23,7 @@ class VideoDataset(torch.utils.data.IterableDataset):
         videos1, videos2 = random.choices(self._files, k=2)
 
         video1 = np.load(videos1)[cam1, :self._episode_len]
-        video2 = np.load(videos2)[cam2, :self._episode_len]
+        video2 = np.load(videos1 if self._same_video else videos2)[cam2, :self._episode_len]
 
         video1 = video1.transpose(0, 3, 1, 2).copy()
         video2 = video2.transpose(0, 3, 1, 2).copy()
