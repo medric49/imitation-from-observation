@@ -261,26 +261,30 @@ class CTWorkspace:
                     eval_trans_loss = 0
                     eval_rec_loss = 0
                     eval_align_loss = 0
+                    eval_sim_loss = 0
                     for _ in range(self.cfg.num_evaluations):
                         video1, video2 = next(self.valid_dataloader_iter)
                         video1 = video1.to(device=utils.device())
                         video2 = video2.to(device=utils.device())
-                        loss, trans_loss, rec_loss, align_loss = self.context_translator.evaluate(video1, video2)
+                        loss, trans_loss, rec_loss, align_loss, sim_loss = self.context_translator.evaluate(video1, video2)
 
                         eval_loss += loss
                         eval_trans_loss += trans_loss
                         eval_rec_loss += rec_loss
                         eval_align_loss += align_loss
+                        eval_sim_loss += sim_loss
 
                     eval_loss /= self.cfg.num_evaluations
                     eval_trans_loss /= self.cfg.num_evaluations
                     eval_rec_loss /= self.cfg.num_evaluations
                     eval_align_loss /= self.cfg.num_evaluations
+                    eval_sim_loss /= self.cfg.num_evaluations
                     metrics = {
                         'loss': eval_loss.item(),
                         'trans_loss': eval_trans_loss.item(),
                         'rec_loss': eval_rec_loss.item(),
-                        'align_loss': eval_align_loss.item()
+                        'align_loss': eval_align_loss.item(),
+                        'eval_sim_loss': eval_sim_loss.item()
                     }
                     self.logger.log_metrics(metrics, self._epoch, 'eval')
 

@@ -49,7 +49,8 @@ class CTNet(nn.Module):
         return video2
 
     def evaluate(self, video1, video2):
-        T = video1.shape[0]
+        T = video1.shape[1]
+        n = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
         video2 = video2.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
@@ -65,14 +66,14 @@ class CTNet(nn.Module):
 
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
-        z3_seq = []
+        z_seq = []
         for t in range(T):
             obs1 = video1[t]  # n x c x h x w
             obs2 = video2[t]  # n x c x h x w
 
             z1, _, _, _, _ = self.enc1(obs1)
             z3 = self.t(z1, fz2)
-            z3_seq.append(z3)
+            z_seq.append(z1)
             z2, _, _, _, _ = self.enc1(obs2)
 
             l_trans += F.mse_loss(torch.flatten(self.dec(z3, c1, c2, c3, c4), start_dim=1),
@@ -81,17 +82,23 @@ class CTNet(nn.Module):
                                 torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
 
-        z3_seq = torch.stack(z3_seq)  # T x n x z
+        z_seq = torch.stack(z_seq)  # T x n x z
+        z_seq = torch.transpose(z_seq, 0, 1)  # n x T x z
 
-        index_1 = random.randint(0, T - 1 - self.context_size)
-        index_2 = index_1 + random.randint(1, self.context_size - 1)
-        index_3 = random.choice([i for i in range(0, index_1)] + [i for i in range(index_1 + self.context_size, T)])
+        t1 = torch.randint(0, T - self.context_size, size=(n,))
+        t2 = t1 + torch.randint(1, self.context_size, size=(n,))
+        t3 = (t1 + torch.randint(self.context_size, T, size=(n, ))) % T
 
-        l_sim = F.cosine_similarity(z3_seq[index_1], z3_seq[index_3]).abs()
+        z_t1 = z_seq[torch.arange(n), t1, :]
+        z_t2 = z_seq[torch.arange(n), t2, :]
+        z_t3 = z_seq[torch.arange(n), t3, :]
+
+        # l_sim = - torch.log(torch.sigmoid((z_t1 * z_t2).sum(dim=1)) + torch.sigmoid(-(z_t1 * z_t3).sum(dim=1))).mean()
+        l_sim = F.cosine_similarity(z_t1, z_t3).abs().sum()
 
         loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2 + l_sim * self.lambda_3
 
-        return loss, l_trans, l_rec, l_align
+        return loss, l_trans, l_rec, l_align, l_sim
 
     def update(self, video1, video2):
         metrics = dict()
@@ -101,7 +108,7 @@ class CTNet(nn.Module):
         self._t_opt.zero_grad()
         self._dec_opt.zero_grad()
 
-        loss, l_trans, l_rec, l_align = self.evaluate(video1, video2)
+        loss, l_trans, l_rec, l_align, l_sim = self.evaluate(video1, video2)
         
         loss.backward()
         
@@ -115,6 +122,7 @@ class CTNet(nn.Module):
             metrics['trans_loss'] = l_trans.item()
             metrics['rec_loss'] = l_rec.item()
             metrics['align_loss'] = l_align.item()
+            metrics['sim_loss'] = l_sim.item()
 
         return metrics
 

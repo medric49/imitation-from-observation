@@ -4,11 +4,11 @@ defaults:
 
 seed: 1
 
-num_epochs: 1000
+num_epochs: 5000
 eval_every_epochs: 10
 num_evaluations: 5
 batch_size: 16
-episode_len: 100
+episode_len: 15
 num_workers: 4
 
 same_video: false
@@ -23,7 +23,7 @@ ct_model:
   lambda_3: 0.1
   hidden_dim: 1024
   use_tb: ${use_tb}
-  context_size: 5
+  context_size: 4
 
 
 exp_group: ${now:%Y.%m.%d}
