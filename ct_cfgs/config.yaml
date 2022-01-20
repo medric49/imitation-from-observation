@@ -18,10 +18,12 @@ use_tb: true
 ct_model:
   _target_: ct_model.CTNet
   lr: 10e-4
-  lambda_1: 0.
-  lambda_2: 0.
+  lambda_1: 0.1
+  lambda_2: 0.1
+  lambda_3: 0.1
   hidden_dim: 1024
   use_tb: ${use_tb}
+  context_size: 5
 
 
 exp_group: ${now:%Y.%m.%d}

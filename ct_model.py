@@ -1,16 +1,21 @@
+import random
 from pathlib import Path
 
 import torch
 from torch import nn
 from torch.nn import functional as F
+import numpy as np
 
 
 class CTNet(nn.Module):
-    def __init__(self, hidden_dim, lr, lambda_1, lambda_2, use_tb):
+    def __init__(self, hidden_dim, lr, lambda_1, lambda_2, lambda_3, use_tb, context_size):
         super(CTNet, self).__init__()
         
         self.lambda_1 = lambda_1
         self.lambda_2 = lambda_2
+        self.lambda_3 = lambda_3
+
+        self.context_size = context_size
 
         self.use_tb = use_tb
 
@@ -59,12 +64,15 @@ class CTNet(nn.Module):
         l_align = 0
 
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
+
+        z3_seq = []
         for t in range(T):
             obs1 = video1[t]  # n x c x h x w
             obs2 = video2[t]  # n x c x h x w
 
             z1, _, _, _, _ = self.enc1(obs1)
             z3 = self.t(z1, fz2)
+            z3_seq.append(z3)
             z2, _, _, _, _ = self.enc1(obs2)
 
             l_trans += F.mse_loss(torch.flatten(self.dec(z3, c1, c2, c3, c4), start_dim=1),
@@ -73,7 +81,15 @@ class CTNet(nn.Module):
                                 torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
 
-        loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2
+        z3_seq = torch.stack(z3_seq)  # T x n x z
+
+        index_1 = random.randint(0, T - 1 - self.context_size)
+        index_2 = index_1 + random.randint(1, self.context_size - 1)
+        index_3 = random.choice([i for i in range(0, index_1)] + [i for i in range(index_1 + self.context_size, T)])
+
+        l_sim = F.cosine_similarity(z3_seq[index_1], z3_seq[index_3]).abs()
+
+        loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2 + l_sim * self.lambda_3
 
         return loss, l_trans, l_rec, l_align
 
