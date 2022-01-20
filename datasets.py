@@ -10,15 +10,19 @@ import utils
 
 
 class VideoDataset(torch.utils.data.IterableDataset):
-    def __init__(self, root, episode_len, same_video=False):
+    def __init__(self, root, episode_len, cam_ids, same_video=False):
         self._root = Path(root)
         self._files = list(self._root.iterdir())
 
         self._episode_len = episode_len
         self._same_video = same_video
+        self._cam_ids = cam_ids
 
     def _sample(self):
-        cam1, cam2 = random.sample([0, 1, 2, 3], k=2)
+        if len(self._cam_ids) > 1:
+            cam1, cam2 = random.sample(self._cam_ids, k=2)
+        else:
+            cam1, cam2 = 0, 0
 
         videos1, videos2 = random.choices(self._files, k=2)
 
