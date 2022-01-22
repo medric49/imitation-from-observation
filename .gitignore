@@ -4,6 +4,7 @@ exp_local
 videos
 ct_exp_local
 ct
+rl_exp_local
 env
 venv
 *.sh
