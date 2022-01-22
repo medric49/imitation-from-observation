@@ -156,9 +156,9 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_train=800, num_valid=200, xml_path=None):
+def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_frames, num_train=800, num_valid=200, xml_path=None):
     root_dir = Path(root_dir)
-    root_dir.mkdir(parents=True, exist_ok=False)
+    root_dir.mkdir(exist_ok=True)
 
     agent = DrQV2Agent.load(expert_file)
     agent.train(training=False)
@@ -170,7 +170,7 @@ def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_train=8
         action = agent.act(time_step.observation, 1, eval_mode=True)
         return action
 
-    def make_video(index, parent_dir):
+    def make_video(parent_dir):
         cameras = {id: [] for id in cam_ids}
 
         time_step = env.reset()
@@ -178,7 +178,7 @@ def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_train=8
         for cam_id, cam in cameras.items():
             cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
 
-        while not time_step.last():
+        for _ in range(num_frames):
             action = act(time_step)
             time_step = env.step(action)
 
@@ -186,14 +186,14 @@ def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_train=8
                 cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
 
         videos = np.array(list(cameras.values()), dtype=np.uint8)
-        np.save(parent_dir / f'{index}', videos)
+        np.save(parent_dir / f'{int(time.time()*1000)}', videos)
 
     with torch.no_grad():
         video_dir = root_dir / 'train'
-        video_dir.mkdir(parents=True)
+        video_dir.mkdir(exist_ok=True)
         for i in tqdm(range(num_train)):
             make_video(i, video_dir)
         video_dir = root_dir / 'valid'
-        video_dir.mkdir(parents=True)
+        video_dir.mkdir(exist_ok=True)
         for i in tqdm(range(num_valid)):
             make_video(i, video_dir)

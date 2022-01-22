@@ -7,5 +7,6 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 if __name__ == '__main__':
     utils.generate_video_from_expert('videos/reacher_hard', 'experts/reacher_hard.pt', 'reacher_hard',
                                      cam_ids=[0],
-                                     num_train=2000,
-                                     num_valid=300)
+                                     num_frames=15,
+                                     num_train=60000,
+                                     num_valid=15000)
