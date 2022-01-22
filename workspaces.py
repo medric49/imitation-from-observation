@@ -460,7 +460,6 @@ class RLWorkspace:
 
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
-            avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
             time_step = self.change_observation_to_state(time_step)
 
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
@@ -470,17 +469,7 @@ class RLWorkspace:
                     action = self.rl_agent.act(state, self.global_step, eval_mode=True)
 
                 time_step = self.eval_env.step(action)
-                frame = time_step.observation
                 time_step = self.change_observation_to_state(time_step)
-                state = time_step.observation
-
-                if step + 1 < avg_states.shape[0]:
-                    target_state = avg_states[step + 1]
-                    target_frame = avg_frames[step + 1]
-                    reward = self.compute_reward(state, frame, target_state, target_frame)
-                else:
-                    reward = 0
-                time_step = time_step._replace(reward=reward)
 
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
@@ -574,9 +563,10 @@ class RLWorkspace:
                 reward = self.compute_reward(state, frame, target_state, target_frame)
             else:
                 reward = 0
+            dmc_reward = time_step.reward
             time_step = time_step._replace(reward=reward)
 
-            episode_reward += time_step.reward
+            episode_reward += dmc_reward
             self.replay_storage.add(time_step)
             self.train_video_recorder.record(frame)
             episode_step += 1
