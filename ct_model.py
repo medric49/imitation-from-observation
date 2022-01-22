@@ -29,7 +29,7 @@ class CTNet(nn.Module):
         self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
         self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
     
-    def translate(self, video1, fobs2, return_state=False):
+    def translate(self, video1, fobs2, return_state=False, keep_enc2=True):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # T x c x h x w
@@ -38,13 +38,17 @@ class CTNet(nn.Module):
         z1, _, _, _, _ = self.enc1(video1)
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
         z3 = self.t(z1, fz2)
-        z3[0] = fz2[0]
+
+        if keep_enc2:
+            z3[0] = fz2[0]
 
         if return_state:
             return z3
 
         video2 = self.dec(z3, c1, c2, c3, c4)  # T x c x h x w
-        video2[0] = fobs2[0]
+
+        if keep_enc2:
+            video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
         return video2
 
@@ -127,7 +131,9 @@ class CTNet(nn.Module):
         return metrics
 
     def encode(self, obs):
-        return self.enc1(obs)
+        obs = obs.to(dtype=torch.float) / 255. - 0.5
+        obs, _, _, _, _ = self.enc1(obs)
+        return obs
 
     @staticmethod
     def load(file):

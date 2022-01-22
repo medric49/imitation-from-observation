@@ -12,6 +12,7 @@ import ct_model
 import datasets
 import dmc
 import drqv2
+import rl_model
 import utils
 import video
 from logger import Logger
@@ -333,16 +334,15 @@ class RLWorkspace:
 
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
-        self.device = torch.device(cfg.device)
         self.setup()
 
-        self.expert = drqv2.DrQV2Agent.load(self.cfg.expert_file).to(utils.device())
-        self.expert.eval()
-        self.context_translator = ct_model.CTNet.load(self.cfg.ct_file).to(utils.device())
+        self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
+        self.expert.train(training=False)
+        self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(utils.device())
         self.context_translator.eval()
 
         self.cfg.agent.action_shape = self.train_env.action_spec().shape
-        self.rl_agent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
+        self.rl_agent: rl_model.RLAgent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -353,14 +353,20 @@ class RLWorkspace:
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
         # create envs
         self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None), self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h)
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None), self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h)
+
+        self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
+                                 self.cfg.action_repeat, self.cfg.seed)
+
         # create replay buffer
-        data_specs = (self.train_env.observation_spec(),
-                      self.train_env.action_spec(),
-                      specs.Array((1,), np.float32, 'reward'),
-                      specs.Array((1,), np.float32, 'discount'))
+        data_specs = (
+            specs.Array(shape=(self.cfg.agent.repr_dim,), dtype=np.float32, name='observation'),
+            self.train_env.action_spec(),
+            specs.Array((1,), np.float32, 'reward'),
+            specs.Array((1,), np.float32, 'discount')
+        )
 
         self.replay_storage = ReplayBufferStorage(data_specs,
                                                   self.work_dir / 'buffer')
@@ -376,6 +382,59 @@ class RLWorkspace:
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
 
+    def _make_expert_video(self):
+        with torch.no_grad():
+            videos = []
+            for _ in range(self.cfg.n_video):
+                cam_id = random.choice(self.cfg.context_camera_ids)
+                episode = []
+                time_step = self.expert_env.reset()
+                episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+                while not time_step.last():
+                    action = self.expert.act(time_step.observation, 1, eval_mode=True)
+                    time_step = self.expert_env.step(action)
+                    episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+                videos.append(episode)
+            videos = np.array(videos, dtype=np.uint8)  # n_video x T x h x w x c
+            videos = videos.transpose((0, 1, 4, 2, 3))  # n_video x T x c x h x w
+        return videos
+
+    def predict_avg_states_frames(self, fobs):
+        expert_videos = self._make_expert_video()
+        with torch.no_grad():
+            states = []
+            videos = []
+
+            fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
+            expert_videos = torch.tensor(expert_videos, device=utils.device(), dtype=torch.float)
+            for expert_video in expert_videos:
+                state = self.context_translator.translate(expert_video, fobs, return_state=True, keep_enc2=False)  # T x z
+                video = self.context_translator.translate(expert_video, fobs, return_state=False, keep_enc2=False)  # T x c x h x w
+
+                states.append(state)
+                videos.append(video)
+            states = torch.stack(states)  # n x T x z
+            videos = torch.stack(videos)  # n x T x c x h x w
+
+            avg_states = states.mean(dim=0)  # T x z
+            avg_frames = videos.mean(dim=0)  # T x c x h x w
+
+        avg_states = avg_states.cpu().numpy()
+        avg_frames = avg_frames.cpu().numpy()
+
+        return avg_states, avg_frames
+
+    def change_observation_to_state(self, time_step):
+        with torch.no_grad():
+            obs = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
+            state = self.context_translator.encode(obs.unsqueeze(0))[0].cpu().numpy()
+        return time_step._replace(observation=state)
+
+    def compute_reward(self, state, frame, target_state, target_frame):
+        frame = frame.astype(np.float).flatten()
+        target_frame = target_frame.astype(np.float).flatten()
+
+        return - np.linalg.norm(state - target_state)
 
     @property
     def global_step(self):
@@ -401,18 +460,24 @@ class RLWorkspace:
 
         while eval_until_episode(episode):
             time_step = self.eval_env.reset()
+            avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
+            time_step = self.change_observation_to_state(time_step)
+
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.rl_agent):
+                    state = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
+                    action = self.rl_agent.act(state, self.global_step, eval_mode=True)
 
-                    obs = time_step.observation
-                    obs = torch.as_tensor(obs, device=utils.device())
-
-
-                    action = self.rl_agent.act(time_step.observation,
-                                            self.global_step,
-                                            eval_mode=True)
                 time_step = self.eval_env.step(action)
+                frame = time_step.observation
+                time_step = self.change_observation_to_state(time_step)
+                state = time_step.observation
+                target_state = avg_states[step + 1]
+                target_frame = avg_frames[step + 1]
+                reward = self.compute_reward(state, frame, target_state, target_frame)
+                time_step = time_step._replace(reward=reward)
+
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
                 step += 1
@@ -436,9 +501,14 @@ class RLWorkspace:
                                       self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
+
         time_step = self.train_env.reset()
+        frame = time_step.observation
+        avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
+        time_step = self.change_observation_to_state(time_step)
+
         self.replay_storage.add(time_step)
-        self.train_video_recorder.init(time_step.observation)
+        self.train_video_recorder.init(frame)
         metrics = None
         while train_until_step(self.global_step):
             if time_step.last():
@@ -461,6 +531,9 @@ class RLWorkspace:
 
                 # reset env
                 time_step = self.train_env.reset()
+                avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
+                time_step = self.change_observation_to_state(time_step)
+
                 self.replay_storage.add(time_step)
                 self.train_video_recorder.init(time_step.observation)
                 # try to save snapshot
@@ -476,21 +549,28 @@ class RLWorkspace:
                 self.eval()
 
             # sample action
-            with torch.no_grad(), utils.eval_mode(self.agent):
-                action = self.agent.act(time_step.observation,
-                                        self.global_step,
-                                        eval_mode=False)
+            with torch.no_grad(), utils.eval_mode(self.rl_agent):
+                state = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
+                action = self.rl_agent.act(state, self.global_step, eval_mode=False)
 
             # try to update the agent
             if not seed_until_step(self.global_step):
-                metrics = self.agent.update(self.replay_iter, self.global_step)
+                metrics = self.rl_agent.update(self.replay_iter, self.global_step)
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
 
             # take env step
             time_step = self.train_env.step(action)
+            frame = time_step.observation
+            time_step = self.change_observation_to_state(time_step)
+            state = time_step.observation
+            target_state = avg_states[episode_step + 1]
+            target_frame = avg_frames[episode_step + 1]
+            reward = self.compute_reward(state, frame, target_state, target_frame)
+            time_step = time_step._replace(reward=reward)
+
             episode_reward += time_step.reward
             self.replay_storage.add(time_step)
-            self.train_video_recorder.record(time_step.observation)
+            self.train_video_recorder.record(frame)
             episode_step += 1
             self._global_step += 1
 
