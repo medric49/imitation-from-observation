@@ -126,6 +126,9 @@ class CTNet(nn.Module):
 
         return metrics
 
+    def encode(self, obs):
+        return self.enc1(obs)
+
     @staticmethod
     def load(file):
         snapshot = Path(file)

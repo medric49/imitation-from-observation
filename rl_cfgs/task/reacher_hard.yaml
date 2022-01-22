@@ -1,0 +1,9 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: reacher_hard
+
+expert_file: experts/reacher_hard.pt
+ct_file: ct/reacher_hard.pt
+

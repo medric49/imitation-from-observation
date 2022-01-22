@@ -64,11 +64,11 @@ class Critic(nn.Module):
         return q1, q2
 
 
-class RLModel(nn.Module):
+class RLAgent(nn.Module):
     def __init__(self, repr_dim, action_shape, lr, feature_dim,
                  hidden_dim, critic_target_tau, num_expl_steps,
                  update_every_steps, stddev_schedule, stddev_clip, use_tb):
-        super(RLModel, self).__init__()
+        super(RLAgent, self).__init__()
 
         self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps

@@ -3,6 +3,7 @@ __pycache__
 exp_local
 videos
 ct_exp_local
+ct
 env
 venv
 *.sh
