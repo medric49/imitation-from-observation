@@ -473,9 +473,13 @@ class RLWorkspace:
                 frame = time_step.observation
                 time_step = self.change_observation_to_state(time_step)
                 state = time_step.observation
-                target_state = avg_states[step + 1]
-                target_frame = avg_frames[step + 1]
-                reward = self.compute_reward(state, frame, target_state, target_frame)
+
+                if step + 1 < avg_states.shape[0]:
+                    target_state = avg_states[step + 1]
+                    target_frame = avg_frames[step + 1]
+                    reward = self.compute_reward(state, frame, target_state, target_frame)
+                else:
+                    reward = 0
                 time_step = time_step._replace(reward=reward)
 
                 self.video_recorder.record(self.eval_env)
@@ -504,7 +508,7 @@ class RLWorkspace:
 
         time_step = self.train_env.reset()
         frame = time_step.observation
-        avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
+        avg_states, avg_frames = self.predict_avg_states_frames(frame)
         time_step = self.change_observation_to_state(time_step)
 
         self.replay_storage.add(time_step)
@@ -531,11 +535,12 @@ class RLWorkspace:
 
                 # reset env
                 time_step = self.train_env.reset()
-                avg_states, avg_frames = self.predict_avg_states_frames(time_step.observation)
+                frame = time_step.observation
+                avg_states, avg_frames = self.predict_avg_states_frames(frame)
                 time_step = self.change_observation_to_state(time_step)
 
                 self.replay_storage.add(time_step)
-                self.train_video_recorder.init(time_step.observation)
+                self.train_video_recorder.init(frame)
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
@@ -563,9 +568,12 @@ class RLWorkspace:
             frame = time_step.observation
             time_step = self.change_observation_to_state(time_step)
             state = time_step.observation
-            target_state = avg_states[episode_step + 1]
-            target_frame = avg_frames[episode_step + 1]
-            reward = self.compute_reward(state, frame, target_state, target_frame)
+            if episode_step + 1 < avg_states.shape[0]:
+                target_state = avg_states[episode_step + 1]
+                target_frame = avg_frames[episode_step + 1]
+                reward = self.compute_reward(state, frame, target_state, target_frame)
+            else:
+                reward = 0
             time_step = time_step._replace(reward=reward)
 
             episode_reward += time_step.reward
