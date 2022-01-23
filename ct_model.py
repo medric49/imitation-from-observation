@@ -1,10 +1,8 @@
-import random
 from pathlib import Path
 
 import torch
 from torch import nn
 from torch.nn import functional as F
-import numpy as np
 
 
 class CTNet(nn.Module):

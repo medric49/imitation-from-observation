@@ -1,12 +1,10 @@
+import random
+from pathlib import Path
 from typing import Iterator
 
-import torch
+import numpy as np
 import torch.utils.data
 from torch.utils.data.dataset import T_co
-from pathlib import Path
-import numpy as np
-import random
-import utils
 
 
 class VideoDataset(torch.utils.data.IterableDataset):
