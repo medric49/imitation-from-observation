@@ -10,8 +10,6 @@ from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
 from tqdm import tqdm
 
-import dmc
-from drqv2 import DrQV2Agent
 
 
 class eval_mode:
@@ -152,18 +150,16 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert_file, task, cam_ids, num_frames, num_train=800, num_valid=200, xml_path=None):
+def generate_video_from_expert(root_dir, expert, env, cam_ids, num_frames, num_train=800, num_valid=200):
     root_dir = Path(root_dir)
     root_dir.mkdir(exist_ok=True)
 
-    agent = DrQV2Agent.load(expert_file)
-    agent.train(training=False)
+    expert.train(training=False)
 
     im_w, im_h = 64, 64
-    env = dmc.make(task, frame_stack=3, action_repeat=2, seed=2, xml_path=xml_path)
 
     def act(time_step):
-        action = agent.act(time_step.observation, 1, eval_mode=True)
+        action = expert.act(time_step.observation, 1, eval_mode=True)
         return action
 
     def make_video(parent_dir):
