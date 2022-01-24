@@ -6,12 +6,13 @@ from torch.nn import functional as F
 
 
 class CTNet(nn.Module):
-    def __init__(self, hidden_dim, lr, lambda_1, lambda_2, lambda_3, use_tb, context_size):
+    def __init__(self, hidden_dim, lr, lambda_trans, lambda_rec, lambda_align, lambda_sim, use_tb, context_size):
         super(CTNet, self).__init__()
-        
-        self.lambda_1 = lambda_1
-        self.lambda_2 = lambda_2
-        self.lambda_3 = lambda_3
+
+        self.lambda_trans = lambda_trans
+        self.lambda_rec = lambda_rec
+        self.lambda_align = lambda_align
+        self.lambda_sim = lambda_sim
 
         self.context_size = context_size
 
@@ -98,7 +99,7 @@ class CTNet(nn.Module):
         # l_sim = - torch.log(torch.sigmoid((z_t1 * z_t2).sum(dim=1)) + torch.sigmoid(-(z_t1 * z_t3).sum(dim=1))).mean()
         l_sim = F.cosine_similarity(z_t1, z_t3).abs().sum()
 
-        loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2 + l_sim * self.lambda_3
+        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * self.lambda_sim
 
         return loss, l_trans, l_rec, l_align, l_sim
 

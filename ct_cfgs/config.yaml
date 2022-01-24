@@ -18,9 +18,10 @@ use_tb: true
 ct_model:
   _target_: ct_model.CTNet
   lr: 10e-4
-  lambda_1: 0.1
-  lambda_2: 0.1
-  lambda_3: 0.1
+  lambda_trans: 1.  # trans loss
+  lambda_rec: 0.1  # rec loss
+  lambda_align: 0.1  # align loss
+  lambda_sim: 0.1  # sim loss
   hidden_dim: 1024
   use_tb: ${use_tb}
   context_size: 4
