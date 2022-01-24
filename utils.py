@@ -11,7 +11,6 @@ from torch.distributions.utils import _standard_normal
 from tqdm import tqdm
 
 
-
 class eval_mode:
     def __init__(self, *models):
         self.models = models
@@ -150,7 +149,7 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert, env, cam_ids, num_frames, num_train=800, num_valid=200):
+def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=200):
     root_dir = Path(root_dir)
     root_dir.mkdir(exist_ok=True)
 
@@ -164,18 +163,21 @@ def generate_video_from_expert(root_dir, expert, env, cam_ids, num_frames, num_t
 
     def make_video(parent_dir):
         cameras = {id: [] for id in cam_ids}
+        context_changer.reset()
 
         time_step = env.reset()
 
-        for cam_id, cam in cameras.items():
-            cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+        with change_context(env, context_changer):
+            for cam_id, cam in cameras.items():
+                cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
 
         for _ in range(num_frames):
             action = act(time_step)
             time_step = env.step(action)
 
-            for cam_id, cam in cameras.items():
-                cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+            with change_context(env, context_changer):
+                for cam_id, cam in cameras.items():
+                    cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
 
         videos = np.array(list(cameras.values()), dtype=np.uint8)
         np.save(parent_dir / f'{int(time.time()*1000)}', videos)
@@ -184,8 +186,54 @@ def generate_video_from_expert(root_dir, expert, env, cam_ids, num_frames, num_t
         video_dir = root_dir / 'train'
         video_dir.mkdir(exist_ok=True)
         for i in tqdm(range(num_train)):
-            make_video(i, video_dir)
+            make_video(video_dir)
         video_dir = root_dir / 'valid'
         video_dir.mkdir(exist_ok=True)
         for i in tqdm(range(num_valid)):
-            make_video(i, video_dir)
+            make_video(video_dir)
+
+
+class ReacherHardContextChanger:
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        self.ground_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+        self.target_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+        self.arm_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+        self.root_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+        self.finger_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+
+    def change_env(self, env):
+        env.physics.named.model.mat_texid['grid'] = -1
+        env.physics.named.model.geom_rgba['ground'] = self.ground_color
+        env.physics.named.model.geom_rgba['target'] = self.target_color
+        env.physics.named.model.geom_rgba['arm'] = self.arm_color
+        env.physics.named.model.geom_rgba['hand'] = self.arm_color
+        env.physics.named.model.geom_rgba['root'] = self.root_color
+        env.physics.named.model.geom_rgba['finger'] = self.finger_color
+
+    def reset_env(self, env):
+        env.physics.named.model.mat_texid['grid'] = 1
+        env.physics.named.model.geom_rgba['ground'] = [0.5, 0.5, 0.5, 1]
+        env.physics.named.model.geom_rgba['target'] = [0.5, 0.5, 0.5, 1]
+        env.physics.named.model.geom_rgba['arm'] = [0.5, 0.5, 0.5, 1]
+        env.physics.named.model.geom_rgba['hand'] = [0.5, 0.5, 0.5, 1]
+        env.physics.named.model.geom_rgba['root'] = [0.5, 0.5, 0.5, 1]
+        env.physics.named.model.geom_rgba['finger'] = [0.5, 0.5, 0.5, 1]
+
+
+class change_context:
+    def __init__(self, env, context_changer):
+        self.env = env
+        self.context_changer = context_changer
+
+    def __enter__(self):
+        self.context_changer.change_env(self.env)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.context_changer.reset_env(self.env)
+
+
+
