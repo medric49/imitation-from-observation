@@ -387,7 +387,7 @@ class RLWorkspace:
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
 
-        self.context_changer = utils.ReacherHardContextChanger()
+        self.context_changer = context_changers.ReacherHardContextChanger()
 
     def _make_expert_video(self):
         with torch.no_grad():
