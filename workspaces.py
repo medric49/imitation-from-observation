@@ -8,6 +8,7 @@ import torch.utils.data
 from dm_env import specs
 from hydra.utils import to_absolute_path
 
+import context_changers
 import ct_model
 import datasets
 import dmc
@@ -353,9 +354,13 @@ class RLWorkspace:
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
         # create envs
         self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None), self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h)
+                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
+                                  context_changers.ReacherHardContextChanger())
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None), self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h)
+                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                 self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
+                                 context_changers.ReacherHardContextChanger())
 
         self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed)
@@ -382,18 +387,25 @@ class RLWorkspace:
         self.train_video_recorder = TrainVideoRecorder(
             self.work_dir if self.cfg.save_train_video else None)
 
+        self.context_changer = utils.ReacherHardContextChanger()
+
     def _make_expert_video(self):
         with torch.no_grad():
             videos = []
             for _ in range(self.cfg.n_video):
+                self.context_changer.reset()
+
                 cam_id = random.choice(self.cfg.context_camera_ids)
                 episode = []
                 time_step = self.expert_env.reset()
-                episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+
+                with utils.change_context(self.expert_env, self.context_changer):
+                    episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
                 while not time_step.last():
                     action = self.expert.act(time_step.observation, 1, eval_mode=True)
                     time_step = self.expert_env.step(action)
-                    episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+                    with utils.change_context(self.expert_env, self.context_changer):
+                        episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
                 videos.append(episode)
             videos = np.array(videos, dtype=np.uint8)  # n_video x T x h x w x c
             videos = videos.transpose((0, 1, 4, 2, 3))  # n_video x T x c x h x w

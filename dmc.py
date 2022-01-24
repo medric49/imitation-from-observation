@@ -174,7 +174,30 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84):
+class ChangeContextWrapper(dm_env.Environment):
+    def __init__(self, env, context_changer):
+        self._context_changer = context_changer
+        self._env = env
+
+    def reset(self):
+        self._context_changer.reset()
+        self._context_changer.change_env(self._env)
+        return self._env.reset()
+
+    def step(self, action):
+        return self._env.step(action)
+
+    def observation_spec(self):
+        return self._env.observation_spec()
+
+    def action_spec(self):
+        return self._env.action_spec()
+
+    def __getattr__(self, name):
+        return getattr(self._env, name)
+
+
+def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer=None):
     domain, task = name.split('_', 1)
     # overwrite cup to ball_in_cup
     domain = dict(cup='ball_in_cup').get(domain, domain)
@@ -209,4 +232,7 @@ def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, 
     # stack several frames
     env = FrameStackWrapper(env, frame_stack, pixels_key)
     env = ExtendedTimeStepWrapper(env)
+
+    if context_changer is not None:
+        env = ChangeContextWrapper(env, context_changer)
     return env
