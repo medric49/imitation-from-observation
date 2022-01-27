@@ -85,19 +85,19 @@ class CTNet(nn.Module):
                                 torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
 
+        t1 = torch.randint(0, T, size=(n,))
+        mask = torch.as_tensor(1 - F.one_hot(t1), dtype=torch.bool)  # n x T
+
         z_seq = torch.stack(z_seq)  # T x n x z
         z_seq = torch.transpose(z_seq, 0, 1)  # n x T x z
 
-        t1 = torch.randint(0, T - self.context_size, size=(n,))
-        t2 = t1 + torch.randint(1, self.context_size, size=(n,))
-        t3 = (t1 + torch.randint(self.context_size, T, size=(n, ))) % T
+        z_cat = z_seq[mask]  # n x (T - 1) x z
+        z_cat = z_cat.view(n, -1)  # n x (T - 1)z
 
-        z_t1 = z_seq[torch.arange(n), t1, :]
-        z_t2 = z_seq[torch.arange(n), t2, :]
-        z_t3 = z_seq[torch.arange(n), t3, :]
+        z_t1 = z_seq[torch.arange(n), t1, :]  # n x z
+        z_t1 = z_t1.repeat(1, T - 1)  # n x (T - 1)z
 
-        # l_sim = - torch.log(torch.sigmoid((z_t1 * z_t2).sum(dim=1)) + torch.sigmoid(-(z_t1 * z_t3).sum(dim=1))).mean()
-        l_sim = F.cosine_similarity(z_t1, z_t3).abs().sum()
+        l_sim = F.cosine_similarity(z_t1, z_cat).abs().mean()
 
         loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * self.lambda_sim
 
