@@ -71,27 +71,36 @@ class CTNet(nn.Module):
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
         z_seq = []
+        frame_seq = []
         for t in range(T):
             obs1 = video1[t]  # n x c x h x w
             obs2 = video2[t]  # n x c x h x w
 
             z1, _, _, _, _ = self.enc1(obs1)
             z3 = self.t(z1, fz2)
-            z_seq.append(z1)
             z2, _, _, _, _ = self.enc1(obs2)
 
-            l_trans += F.mse_loss(torch.flatten(self.dec(z3, c1, c2, c3, c4), start_dim=1),
-                                  torch.flatten(obs2, start_dim=1))
-            l_rec += F.mse_loss(torch.flatten(self.dec(z2, c1, c2, c3, c4), start_dim=1),
-                                torch.flatten(obs2, start_dim=1))
+            obs_z3 = self.dec(z3, c1, c2, c3, c4)
+            obs_z2 = self.dec(z2, c1, c2, c3, c4)
+
+            l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1))
+            l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3, z2)
+
+            z_seq.append(z1)
+            frame_seq.append(obs_z3)
 
         t1 = random.randint(0, T - 1)
         z_t1 = z_seq[t1]
+        frame_t1 = frame_seq[t1]
+
+        frame_seq = torch.stack(frame_seq)
+        frame_seq = torch.flatten(frame_seq - frame_t1, start_dim=2)
+        gt_frame_seq = torch.flatten(video2 - video2[t1], start_dim=2)
+
         l_sim = 0.
         for t in range(T):
-            if t1 != t:
-                l_sim += F.cosine_similarity(z_t1, z_seq[t]).abs().sum()
+            l_sim += F.mse_loss(frame_seq[t], gt_frame_seq[t])
         l_sim /= T
 
         loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * self.lambda_sim
