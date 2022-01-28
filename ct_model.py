@@ -93,16 +93,18 @@ class CTNet(nn.Module):
         frame_seq = torch.flatten(torch.stack(frame_seq), start_dim=2)
         gt_frame_seq = torch.flatten(video2, start_dim=2)
 
-        for t in range(1, T):
-            frame_seq[t] = frame_seq[t] - frame_seq[t - 1]
-            gt_frame_seq[t] = gt_frame_seq[t] - gt_frame_seq[t - 1]
-        frame_seq = frame_seq[1:T]
-        gt_frame_seq = gt_frame_seq[1:T]
-
         l_sim = 0.
-        for t in range(T - 1):
-            l_sim += F.mse_loss(frame_seq[t], gt_frame_seq[t])
-        l_sim /= T
+        for t in range(5, T):
+            d1 = frame_seq[t] - frame_seq[t - 5]
+            d2 = gt_frame_seq[t] - gt_frame_seq[t - 5]
+            l_sim += F.mse_loss(d1, d2)
+
+        t1 = random.randint(0, T-1)
+        z_t1 = z_seq[t1]
+
+        for t in range(T):
+            if t != t1:
+                l_sim += F.cosine_similarity(z_t1, z_seq[t]).abs().sum()
 
         loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * self.lambda_sim
 
