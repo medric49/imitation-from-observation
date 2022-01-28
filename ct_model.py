@@ -178,7 +178,11 @@ class EncoderNet(nn.Module):
 class TranslatorNet(nn.Module):
     def __init__(self, hidden_dim):
         super(TranslatorNet, self).__init__()
-        self.translator = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.translator = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
 
     def forward(self, z1, z2):
         z = torch.cat([z1, z2], dim=1)
