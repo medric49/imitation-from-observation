@@ -21,7 +21,7 @@ class CTNet(nn.Module):
 
         self.enc1 = EncoderNet(hidden_dim)
         self.enc2 = EncoderNet(hidden_dim)
-        self.t = TranslatorNet(hidden_dim)
+        self.t = LSTMTranslator(hidden_dim)
         self.dec = DecoderNet(hidden_dim)
 
         self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
@@ -33,20 +33,24 @@ class CTNet(nn.Module):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # T x c x h x w
-        fobs2 = fobs2.to(dtype=torch.float).repeat(T, 1, 1, 1) / 255. - 0.5  # T x c x h x w
+        fobs2 = fobs2.to(dtype=torch.float) / 255. - 0.5  # c x h x w
+        video1 = video1.unsqueeze(dim=1)
+        fobs2 = fobs2.unsqueeze(dim=0)
 
-        z1, _, _, _, _ = self.enc1(video1)
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = torch.stack(z1_seq)
+
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
-        z3 = self.t(z1, fz2)
 
-        if keep_enc2:
-            z3[0] = fz2[0]
+        z3_seq = self.t(z1_seq, fz2)
 
         if return_state:
-            return z3
+            return z3_seq.squeeze(dim=1)
 
-        video2 = self.dec(z3, c1, c2, c3, c4)  # T x c x h x w
+        video2 = [self.dec(z3_seq[t], c1, c2, c3, c4) for t in range(T)]  # T x c x h x w
+        video2 = torch.stack(video2)
 
+        video2 = video2.squeeze(dim=1)
         if keep_enc2:
             video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
@@ -70,24 +74,25 @@ class CTNet(nn.Module):
 
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = torch.stack(z1_seq)
+        z3_seq = self.t(z1_seq, fz2)
+
+        z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
+        z2_seq = torch.stack(z2_seq)
+
         z_seq = []
         frame_seq = []
         for t in range(T):
-            obs1 = video1[t]  # n x c x h x w
-            obs2 = video2[t]  # n x c x h x w
-
-            z1, _, _, _, _ = self.enc1(obs1)
-            z3 = self.t(z1, fz2)
-            z2, _, _, _, _ = self.enc1(obs2)
-
-            obs_z3 = self.dec(z3, c1, c2, c3, c4)
-            obs_z2 = self.dec(z2, c1, c2, c3, c4)
+            obs2 = video2[t]
+            obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
+            obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
 
             l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1))
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))
-            l_align += F.mse_loss(z3, z2)
+            l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
-            z_seq.append(z1)
+            z_seq.append(z1_seq[t])
             frame_seq.append(obs_z3)
 
         frame_seq = torch.flatten(torch.stack(frame_seq), start_dim=2)
@@ -186,8 +191,8 @@ class TranslatorNet(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
 
-    def forward(self, z1, z2):
-        z = torch.cat([z1, z2], dim=1)
+    def forward(self, z1, fz2):
+        z = torch.cat([z1, fz2], dim=1)
         z = self.translator(z)
         return z
 
@@ -232,3 +237,15 @@ class DecoderNet(nn.Module):
         obs = self.leaky_relu(self.t_conv_1(d1))
         return obs
 
+
+class LSTMTranslator(nn.Module):
+    def __init__(self, hidden_dim):
+        super(LSTMTranslator, self).__init__()
+        self.num_layers = 2
+        self.translator = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
+
+    def forward(self, z1_seq, z2):
+        c0 = z2.repeat(self.num_layers, 1, 1)
+        h0 = torch.zeros_like(z2).repeat(self.num_layers, 1, 1)
+        z3_seq, _ = self.translator(z1_seq, (h0, c0))
+        return z3_seq
