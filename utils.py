@@ -185,11 +185,11 @@ def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, 
     with torch.no_grad():
         video_dir = root_dir / 'train'
         video_dir.mkdir(exist_ok=True)
-        for i in tqdm(range(num_train)):
+        for _ in tqdm(range(num_train)):
             make_video(video_dir)
         video_dir = root_dir / 'valid'
         video_dir.mkdir(exist_ok=True)
-        for i in tqdm(range(num_valid)):
+        for _ in tqdm(range(num_valid)):
             make_video(video_dir)
 
 
