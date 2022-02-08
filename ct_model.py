@@ -82,7 +82,6 @@ class CTNet(nn.Module):
         z2_seq = torch.stack(z2_seq)
 
         z_seq = []
-        frame_seq = []
         for t in range(T):
             obs2 = video2[t]
             obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
@@ -93,17 +92,8 @@ class CTNet(nn.Module):
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
             z_seq.append(z1_seq[t])
-            frame_seq.append(obs_z3)
-
-        frame_seq = torch.flatten(torch.stack(frame_seq), start_dim=2)
-        gt_frame_seq = torch.flatten(video2, start_dim=2)
 
         l_sim = 0.
-        for t in range(5, T):
-            d1 = frame_seq[t] - frame_seq[t - 5]
-            d2 = gt_frame_seq[t] - gt_frame_seq[t - 5]
-            l_sim += F.mse_loss(d1, d2)
-
         t1 = random.randint(0, T-1)
         z_t1 = z_seq[t1]
 

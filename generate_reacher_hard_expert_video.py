@@ -15,6 +15,6 @@ if __name__ == '__main__':
     context_changer = context_changers.ReacherHardContextChanger()
 
     utils.generate_video_from_expert(
-        'videos/reacher_hard', expert, env, context_changer, cam_ids=[0],
-        num_frames=15, num_train=60000, num_valid=15000)
+        'videos/reacher_hard_v3', expert, env, context_changer, cam_ids=[0],
+        num_frames=25, num_train=60000, num_valid=15000)
 
