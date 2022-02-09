@@ -175,17 +175,30 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 
 
 class ChangeContextWrapper(dm_env.Environment):
-    def __init__(self, env, context_changer):
+    def __init__(self, env, context_changer, camera_id, im_h, im_w, pixels_key):
         self._context_changer = context_changer
         self._env = env
+        self._camera_id = camera_id
+        self._im_h = im_h
+        self._im_w = im_w
+        self._pixels_key = pixels_key
 
     def reset(self):
         self._context_changer.reset()
+        time_step = self._env.reset()
         self._context_changer.change_env(self._env)
-        return self._env.reset()
+        observation = time_step.observation
+        observation[self._pixels_key] = self._env.physics.render(height=self._im_h, width=self._im_w, camera_id=self._camera_id)
+        time_step = time_step._replace(observation=observation)
+        return time_step
 
     def step(self, action):
-        return self._env.step(action)
+        time_step = self._env.step(action)
+        observation = time_step.observation
+        observation[self._pixels_key] = self._env.physics.render(height=self._im_h, width=self._im_w,
+                                                                 camera_id=self._camera_id)
+        time_step = time_step._replace(observation=observation)
+        return time_step
 
     def observation_spec(self):
         return self._env.observation_spec()
@@ -229,10 +242,9 @@ def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, 
         env = pixels.Wrapper(env,
                              pixels_only=True,
                              render_kwargs=render_kwargs)
+        if context_changer is not None:
+            env = ChangeContextWrapper(env, context_changer, camera_id, im_h, im_w, pixels_key)
     # stack several frames
     env = FrameStackWrapper(env, frame_stack, pixels_key)
     env = ExtendedTimeStepWrapper(env)
-
-    if context_changer is not None:
-        env = ChangeContextWrapper(env, context_changer)
     return env
