@@ -363,7 +363,7 @@ class RLWorkspace:
                                  context_changers.ReacherHardContextChanger())
 
         self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed)
+                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
 
         # create replay buffer
         data_specs = (
