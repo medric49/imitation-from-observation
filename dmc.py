@@ -194,6 +194,7 @@ class ChangeContextWrapper(dm_env.Environment):
 
     def step(self, action):
         time_step = self._env.step(action)
+        self._context_changer.change_env(self._env)
         observation = time_step.observation
         observation[self._pixels_key] = self._env.physics.render(height=self._im_h, width=self._im_w,
                                                                  camera_id=self._camera_id)
