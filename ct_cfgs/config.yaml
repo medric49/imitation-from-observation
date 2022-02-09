@@ -1,13 +1,13 @@
 defaults:
   - _self_
-  - task@_global_: finger_turn_easy
+  - task@_global_: reacher_hard
 
 seed: 1
 
-num_epochs: 5000
+num_epochs: 5500
 eval_every_epochs: 20
 num_evaluations: 5
-batch_size: 32
+batch_size: 16
 episode_len: 25
 num_workers: 4
 
