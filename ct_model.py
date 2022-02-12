@@ -81,7 +81,6 @@ class CTNet(nn.Module):
         z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
         z2_seq = torch.stack(z2_seq)
 
-        z_seq = []
         for t in range(T):
             obs2 = video2[t]
             obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
@@ -91,19 +90,9 @@ class CTNet(nn.Module):
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
-            z_seq.append(z1_seq[t])
+        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align
 
-        l_sim = 0.
-        t1 = random.randint(0, T-1)
-        z_t1 = z_seq[t1]
-
-        for t in range(T):
-            if t != t1:
-                l_sim += F.cosine_similarity(z_t1, z_seq[t]).abs().sum()
-
-        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * self.lambda_sim
-
-        return loss, l_trans, l_rec, l_align, l_sim
+        return loss, l_trans, l_rec, l_align
 
     def update(self, video1, video2):
         metrics = dict()
