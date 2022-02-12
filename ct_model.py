@@ -6,21 +6,18 @@ from torch.nn import functional as F
 
 
 class CTNet(nn.Module):
-    def __init__(self, hidden_dim, lr, lambda_trans, lambda_rec, lambda_align, lambda_sim, use_tb, context_size):
+    def __init__(self, hidden_dim, lr, lambda_trans, lambda_rec, lambda_align, use_tb, translator):
         super(CTNet, self).__init__()
 
         self.lambda_trans = lambda_trans
         self.lambda_rec = lambda_rec
         self.lambda_align = lambda_align
-        self.lambda_sim = lambda_sim
-
-        self.context_size = context_size
 
         self.use_tb = use_tb
 
         self.enc1 = EncoderNet(hidden_dim)
         self.enc2 = EncoderNet(hidden_dim)
-        self.t = LSTMTranslator(hidden_dim)
+        self.t = translator
         self.dec = DecoderNet(hidden_dim)
 
         self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
@@ -101,7 +98,7 @@ class CTNet(nn.Module):
         self._t_opt.zero_grad()
         self._dec_opt.zero_grad()
 
-        loss, l_trans, l_rec, l_align, l_sim = self.evaluate(video1, video2)
+        loss, l_trans, l_rec, l_align = self.evaluate(video1, video2)
         
         loss.backward()
         
@@ -115,7 +112,6 @@ class CTNet(nn.Module):
             metrics['trans_loss'] = l_trans.item()
             metrics['rec_loss'] = l_rec.item()
             metrics['align_loss'] = l_align.item()
-            metrics['sim_loss'] = l_sim.item()
 
         return metrics
 
@@ -169,10 +165,13 @@ class TranslatorNet(nn.Module):
             nn.Linear(hidden_dim, hidden_dim)
         )
 
-    def forward(self, z1, fz2):
-        z = torch.cat([z1, fz2], dim=1)
-        z = self.translator(z)
-        return z
+    def forward(self, z1_seq, fz2):
+        z3_seq = []
+        for z1 in z1_seq:
+            z3 = self.translator(torch.cat([z1, fz2], dim=1))
+            z3_seq.append(z3)
+        z3_seq = torch.stack(z3_seq)
+        return z3_seq
 
 
 class DecoderNet(nn.Module):
@@ -216,9 +215,9 @@ class DecoderNet(nn.Module):
         return obs
 
 
-class LSTMTranslator(nn.Module):
+class LSTMTranslatorNet(nn.Module):
     def __init__(self, hidden_dim):
-        super(LSTMTranslator, self).__init__()
+        super(LSTMTranslatorNet, self).__init__()
         self.num_layers = 2
         self.translator = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
 

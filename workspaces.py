@@ -215,7 +215,8 @@ class CTWorkspace:
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
 
-        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model).to(utils.device())
+        translator = hydra.utils.instantiate(self.cfg.translator_model)
+        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model, translator=translator).to(utils.device())
 
         self.dataset = datasets.VideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
         self.valid_dataset = datasets.VideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
@@ -264,30 +265,26 @@ class CTWorkspace:
                     eval_trans_loss = 0
                     eval_rec_loss = 0
                     eval_align_loss = 0
-                    eval_sim_loss = 0
                     for _ in range(self.cfg.num_evaluations):
                         video1, video2 = next(self.valid_dataloader_iter)
                         video1 = video1.to(device=utils.device())
                         video2 = video2.to(device=utils.device())
-                        loss, trans_loss, rec_loss, align_loss, sim_loss = self.context_translator.evaluate(video1, video2)
+                        loss, trans_loss, rec_loss, align_loss = self.context_translator.evaluate(video1, video2)
 
                         eval_loss += loss
                         eval_trans_loss += trans_loss
                         eval_rec_loss += rec_loss
                         eval_align_loss += align_loss
-                        eval_sim_loss += sim_loss
 
                     eval_loss /= self.cfg.num_evaluations
                     eval_trans_loss /= self.cfg.num_evaluations
                     eval_rec_loss /= self.cfg.num_evaluations
                     eval_align_loss /= self.cfg.num_evaluations
-                    eval_sim_loss /= self.cfg.num_evaluations
                     metrics = {
                         'loss': eval_loss.item(),
                         'trans_loss': eval_trans_loss.item(),
                         'rec_loss': eval_rec_loss.item(),
                         'align_loss': eval_align_loss.item(),
-                        'eval_sim_loss': eval_sim_loss.item()
                     }
                     self.logger.log_metrics(metrics, self._epoch, 'eval')
 

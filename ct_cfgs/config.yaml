@@ -23,7 +23,10 @@ ct_model:
   lambda_align: 1.  # align loss
   hidden_dim: 1024
   use_tb: ${use_tb}
-  context_size: 4
+
+translator_model:
+  _target_: ct_model.LSTMTranslatorNet
+  hidden_dim: ${ct_model.hidden_dim}
 
 
 exp_group: ${now:%Y.%m.%d}
