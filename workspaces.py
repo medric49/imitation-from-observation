@@ -575,7 +575,7 @@ class RLWorkspace:
             dmc_reward = time_step.reward
             time_step = time_step._replace(reward=reward)
 
-            episode_reward += dmc_reward
+            episode_reward += time_step.reward
             self.replay_storage.add(time_step)
             self.train_video_recorder.record(frame)
             episode_step += 1
