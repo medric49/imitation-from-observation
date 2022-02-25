@@ -519,7 +519,7 @@ class RLWorkspace:
         avg_states, avg_frames = self.predict_avg_states_frames(frame)
         time_step = self.change_observation_to_state(time_step)
         state = time_step.observation
-        target_state = avg_states[episode_step + 1]
+        target_state = avg_states[1]
         time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
         self.replay_storage.add(time_step)
@@ -550,7 +550,7 @@ class RLWorkspace:
                 avg_states, avg_frames = self.predict_avg_states_frames(frame)
                 time_step = self.change_observation_to_state(time_step)
                 state = time_step.observation
-                target_state = avg_states[episode_step + 1]
+                target_state = avg_states[1]
                 time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
                 self.replay_storage.add(time_step)
