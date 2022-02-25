@@ -364,7 +364,7 @@ class RLWorkspace:
 
         # create replay buffer
         data_specs = (
-            specs.Array(shape=(self.cfg.agent.repr_dim,), dtype=np.float32, name='observation'),
+            specs.Array(shape=(self.cfg.agent.state_dim,), dtype=np.float32, name='observation'),
             self.train_env.action_spec(),
             specs.Array((1,), np.float32, 'reward'),
             specs.Array((1,), np.float32, 'discount')
