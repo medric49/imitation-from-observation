@@ -204,7 +204,7 @@ class RLAgent(nn.Module):
             self.update_critic(state, action, reward, discount, next_state, step))
 
         # update actor
-        metrics.update(self.update_actor(state, step))
+        metrics.update(self.update_actor(state.detach(), step))
 
         # update critic target
         utils.soft_update_params(self.critic, self.critic_target,
