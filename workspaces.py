@@ -364,7 +364,7 @@ class RLWorkspace:
 
         # create replay buffer
         data_specs = (
-            specs.Array(shape=(self.cfg.agent.state_dim,), dtype=np.float32, name='observation'),
+            specs.Array(shape=(self.cfg.agent.state_dim * 2,), dtype=np.float32, name='observation'),
             self.train_env.action_spec(),
             specs.Array((1,), np.float32, 'reward'),
             specs.Array((1,), np.float32, 'discount')
@@ -468,8 +468,14 @@ class RLWorkspace:
         eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
 
         while eval_until_episode(episode):
+            episode_step = 0
             time_step = self.eval_env.reset()
+            frame = time_step.observation
+            avg_states, avg_frames = self.predict_avg_states_frames(frame)
             time_step = self.change_observation_to_state(time_step)
+            state = time_step.observation
+            target_state = avg_states[episode_step + 1]
+            time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
             self.video_recorder.init(self.eval_env, enabled=(episode == 0))
             while not time_step.last():
@@ -479,10 +485,14 @@ class RLWorkspace:
 
                 time_step = self.eval_env.step(action)
                 time_step = self.change_observation_to_state(time_step)
+                state = time_step.observation
+                target_state = avg_states[episode_step + 1]
+                time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward
                 step += 1
+                episode_step += 1
 
             episode += 1
             self.video_recorder.save(f'{self.global_frame}.mp4')
@@ -508,6 +518,9 @@ class RLWorkspace:
         frame = time_step.observation
         avg_states, avg_frames = self.predict_avg_states_frames(frame)
         time_step = self.change_observation_to_state(time_step)
+        state = time_step.observation
+        target_state = avg_states[episode_step + 1]
+        time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
         self.replay_storage.add(time_step)
         self.train_video_recorder.init(frame)
@@ -536,6 +549,9 @@ class RLWorkspace:
                 frame = time_step.observation
                 avg_states, avg_frames = self.predict_avg_states_frames(frame)
                 time_step = self.change_observation_to_state(time_step)
+                state = time_step.observation
+                target_state = avg_states[episode_step + 1]
+                time_step = time_step._replace(observation=np.concatenate([state, target_state]))
 
                 self.replay_storage.add(time_step)
                 self.train_video_recorder.init(frame)
@@ -572,8 +588,9 @@ class RLWorkspace:
                 reward = self.compute_reward(state, frame, target_state, target_frame)
             else:
                 reward = 0
+                target_state = np.zeros_like(state)
             dmc_reward = time_step.reward
-            time_step = time_step._replace(reward=reward)
+            time_step = time_step._replace(reward=reward, observation=np.concatenate([state, target_state]))
 
             episode_reward += time_step.reward
             self.replay_storage.add(time_step)

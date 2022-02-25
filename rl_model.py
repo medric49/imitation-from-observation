@@ -16,8 +16,6 @@ class Encoder(nn.Module):
         self.encoder = nn.Sequential(
             nn.Linear(state_dim, repr_dim),
             nn.LeakyReLU(),
-            nn.Linear(repr_dim, repr_dim),
-            nn.LeakyReLU()
         )
         self.apply(utils.weight_init)
 
@@ -94,7 +92,7 @@ class RLAgent(nn.Module):
         self.stddev_clip = stddev_clip
 
         # models
-        self.encoder = Encoder(state_dim, repr_dim)
+        self.encoder = Encoder(state_dim * 2, repr_dim)
         self.actor = Actor(repr_dim, action_shape, feature_dim, hidden_dim)
         self.critic = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
         self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
@@ -133,12 +131,14 @@ class RLAgent(nn.Module):
         metrics = dict()
 
         with torch.no_grad():
-            stddev = utils.schedule(self.stddev_schedule, step)
-            dist = self.actor(next_state, stddev)
-            next_action = dist.sample(clip=self.stddev_clip)
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
-            target_V = torch.min(target_Q1, target_Q2)
-            target_Q = reward + (discount * target_V)
+            # stddev = utils.schedule(self.stddev_schedule, step)
+            # dist = self.actor(next_state, stddev)
+            # next_action = dist.sample(clip=self.stddev_clip)
+            # target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            # target_V = torch.min(target_Q1, target_Q2)
+            # target_Q = reward + (discount * target_V)
+
+            target_Q = reward
 
         Q1, Q2 = self.critic(state, action)
         critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
