@@ -13,7 +13,7 @@ action_repeat: 2
 discount: 0.99
 # train settings
 
-n_video : 10
+n_video : 20
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
@@ -38,7 +38,8 @@ feature_dim: 50
 
 agent:
   _target_: rl_model.RLAgent
-  repr_dim: 1024
+  state_dim: 1024
+  repr_dim: 512
   action_shape: ??? # to be specified later
   lr: ${lr}
   critic_target_tau: 0.01
