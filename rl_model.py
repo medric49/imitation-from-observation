@@ -9,21 +9,6 @@ import torch.nn.functional as F
 import utils
 
 
-class Encoder(nn.Module):
-    def __init__(self, state_dim, repr_dim):
-        super().__init__()
-
-        self.encoder = nn.Sequential(
-            nn.Linear(state_dim, repr_dim),
-            nn.LeakyReLU(),
-        )
-        self.apply(utils.weight_init)
-
-    def forward(self, state):
-        state = self.encoder(state)
-        return state
-
-
 class Actor(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
         super().__init__()
@@ -31,7 +16,7 @@ class Actor(nn.Module):
         self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
                                    nn.LayerNorm(feature_dim), nn.Tanh())
 
-        self.policy = nn.Sequential(nn.Linear(feature_dim, hidden_dim),
+        self.policy = nn.Sequential(nn.Linear(feature_dim * 2, hidden_dim),
                                     nn.ReLU(inplace=True),
                                     nn.Linear(hidden_dim, hidden_dim),
                                     nn.ReLU(inplace=True),
@@ -39,8 +24,10 @@ class Actor(nn.Module):
 
         self.apply(utils.weight_init)
 
-    def forward(self, state, std):
-        h = self.trunk(state)
+    def forward(self, state, target_state, std):
+        current_h = self.trunk(state)
+        target_h = self.trunk(target_state)
+        h = torch.cat([current_h, target_h], dim=1)
 
         mu = self.policy(h)
         mu = torch.tanh(mu)
@@ -50,75 +37,65 @@ class Actor(nn.Module):
         return dist
 
 
-class Critic(nn.Module):
-    def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
+class Dynamics(nn.Module):
+    def __init__(self, repr_dim, action_shape):
         super().__init__()
 
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
-
-        self.Q1 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
-            nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
-
-        self.Q2 = nn.Sequential(
-            nn.Linear(feature_dim + action_shape[0], hidden_dim),
-            nn.ReLU(inplace=True), nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(inplace=True), nn.Linear(hidden_dim, 1))
+        self.p = nn.Sequential(
+            nn.Linear(repr_dim + action_shape[0], 512), nn.LeakyReLU(),
+            nn.Linear(512, 128), nn.LeakyReLU(),
+            nn.Linear(128, 128), nn.LeakyReLU(),
+            nn.Linear(128, 128), nn.LeakyReLU(),
+            nn.Linear(128, 512), nn.LeakyReLU(),
+            nn.Linear(512, repr_dim)
+        )
 
         self.apply(utils.weight_init)
 
     def forward(self, state, action):
-        h = self.trunk(state)
-        h_action = torch.cat([h, action], dim=-1)
-        q1 = self.Q1(h_action)
-        q2 = self.Q2(h_action)
+        h_action = torch.cat([state, action], dim=-1)
+        pred_state = self.p(h_action)
 
-        return q1, q2
+        return pred_state
 
 
 class RLAgent(nn.Module):
     def __init__(self, state_dim, repr_dim, action_shape, lr, feature_dim,
-                 hidden_dim, critic_target_tau, num_expl_steps,
+                 hidden_dim, num_expl_steps,
                  update_every_steps, stddev_schedule, stddev_clip, use_tb):
         super(RLAgent, self).__init__()
 
-        self.critic_target_tau = critic_target_tau
         self.update_every_steps = update_every_steps
         self.use_tb = use_tb
         self.num_expl_steps = num_expl_steps
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
 
+        self.state_dim = state_dim
+
         # models
-        self.encoder = Encoder(state_dim * 2, repr_dim)
-        self.actor = Actor(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic_target.load_state_dict(self.critic.state_dict())
+        self.actor = Actor(state_dim, action_shape, feature_dim, hidden_dim)
+        self.dynamics = Dynamics(state_dim, action_shape)
 
         # optimizers
-        self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr=lr)
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr)
-        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
+        self.dynamics_opt = torch.optim.Adam(self.dynamics.parameters(), lr=lr)
 
         # data augmentation
 
         self.train()
-        self.critic_target.train()
 
     def train(self, training=True):
         self.training = training
-        self.encoder.train(training)
         self.actor.train(training)
-        self.critic.train(training)
+        self.dynamics.train(training)
 
     def act(self, state, step, eval_mode):
         state = state.unsqueeze(0)
-        state = self.encoder.encoder(state)
+        state, target_state = state[:, :self.state_dim], state[:, self.state_dim:]
+
         stddev = utils.schedule(self.stddev_schedule, step)
-        dist = self.actor(state, stddev)
+        dist = self.actor(state, target_state, stddev)
         if eval_mode:
             action = dist.mean
         else:
@@ -127,53 +104,42 @@ class RLAgent(nn.Module):
                 action.uniform_(-1.0, 1.0)
         return action.cpu().numpy()[0]
 
-    def update_critic(self, state, action, reward, discount, next_state, step):
+    def update_dynamics(self, state, action, next_state):
         metrics = dict()
 
-        with torch.no_grad():
-            # stddev = utils.schedule(self.stddev_schedule, step)
-            # dist = self.actor(next_state, stddev)
-            # next_action = dist.sample(clip=self.stddev_clip)
-            # target_Q1, target_Q2 = self.critic_target(next_state, next_action)
-            # target_V = torch.min(target_Q1, target_Q2)
-            # target_Q = reward + (discount * target_V)
-
-            target_Q = reward
-
-        Q1, Q2 = self.critic(state, action)
-        critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
+        pred_state = self.dynamics(state, action)
+        dynamics_loss = F.mse_loss(pred_state, next_state)
 
         if self.use_tb:
-            metrics['critic_target_q'] = target_Q.mean().item()
-            metrics['critic_q1'] = Q1.mean().item()
-            metrics['critic_q2'] = Q2.mean().item()
-            metrics['critic_loss'] = critic_loss.item()
+            metrics['dynamics_loss'] = dynamics_loss.item()
 
-        # optimize critic
-        self.encoder_opt.zero_grad(set_to_none=True)
-        self.critic_opt.zero_grad(set_to_none=True)
-        critic_loss.backward()
-        self.critic_opt.step()
-        self.encoder_opt.step()
+        # optimize dynamics
+        self.dynamics_opt.zero_grad(set_to_none=True)
+        dynamics_loss.backward()
+        self.dynamics_opt.step()
 
         return metrics
 
-    def update_actor(self, state, step):
+    def update_actor(self, state, target_state, step):
         metrics = dict()
 
+        self.dynamics.eval()
+
         stddev = utils.schedule(self.stddev_schedule, step)
-        dist = self.actor(state, stddev)
+        dist = self.actor(state, target_state, stddev)
         action = dist.sample(clip=self.stddev_clip)
         log_prob = dist.log_prob(action).sum(-1, keepdim=True)
-        Q1, Q2 = self.critic(state, action)
-        Q = torch.min(Q1, Q2)
 
-        actor_loss = -Q.mean()
+        pred_state = self.dynamics(state, action)
+
+        actor_loss = F.mse_loss(pred_state, target_state)
 
         # optimize actor
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
         self.actor_opt.step()
+
+        self.dynamics.train()
 
         if self.use_tb:
             metrics['actor_loss'] = actor_loss.item()
@@ -191,24 +157,17 @@ class RLAgent(nn.Module):
         batch = next(replay_iter)
         state, action, reward, discount, next_state = utils.to_torch(
             batch, utils.device())
-
-        state = self.encoder(state)
-        with torch.no_grad():
-            next_state = self.encoder(next_state)
+        state, target_state = state[:, :self.state_dim], state[:, self.state_dim:]
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
 
-        # update critic
+        # update dynamics
         metrics.update(
-            self.update_critic(state, action, reward, discount, next_state, step))
+            self.update_dynamics(state, action, next_state))
 
         # update actor
-        metrics.update(self.update_actor(state.detach(), step))
-
-        # update critic target
-        utils.soft_update_params(self.critic, self.critic_target,
-                                 self.critic_target_tau)
+        metrics.update(self.update_actor(state, target_state, step))
 
         return metrics
 
