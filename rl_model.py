@@ -158,6 +158,7 @@ class RLAgent(nn.Module):
         state, action, reward, discount, next_state = utils.to_torch(
             batch, utils.device())
         state, target_state = state[:, :self.state_dim], state[:, self.state_dim:]
+        next_state = next_state[:, :self.state_dim]
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
