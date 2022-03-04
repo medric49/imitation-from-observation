@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 import random
 
@@ -7,12 +8,14 @@ import torch
 import torch.utils.data
 from dm_env import specs
 from hydra.utils import to_absolute_path
+from tqdm import tqdm
 
 import context_changers
 import ct_model
 import datasets
 import dmc
 import drqv2
+import irl_model
 import rl_model
 import utils
 import video
@@ -612,6 +615,255 @@ class RLWorkspace:
     def save_snapshot(self):
         snapshot = self.work_dir / 'snapshot.pt'
         keys_to_save = ['rl_agent', 'timer', '_global_step', '_global_episode']
+        payload = {k: self.__dict__[k] for k in keys_to_save}
+        with snapshot.open('wb') as f:
+            torch.save(payload, f)
+
+    def load_snapshot(self):
+        snapshot = self.work_dir / 'snapshot.pt'
+        with snapshot.open('rb') as f:
+            payload = torch.load(f)
+        for k, v in payload.items():
+            self.__dict__[k] = v
+
+
+class IRLWorkspace:
+    def __init__(self, cfg):
+        self.work_dir = Path.cwd()
+        print(f'workspace: {self.work_dir}')
+
+        self.cfg = cfg
+        utils.set_seed_everywhere(cfg.seed)
+        self.setup()
+
+        self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
+        self.expert.train(training=False)
+        self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(utils.device())
+        self.context_translator.eval()
+
+        self.cfg.agent.action_shape = self.train_env.action_spec().shape
+        self.rl_agent: irl_model.IRLAgent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
+
+        self.timer = utils.Timer()
+        self._global_step = 0
+        self._global_episode = 0
+        self.train_epoch = 0
+        self.eval_return = 0
+
+    def setup(self):
+        # create logger
+        self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
+        # create envs
+        self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
+                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
+                                  context_changers.ReacherHardContextChanger())
+        self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
+                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                 self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
+                                 context_changers.ReacherHardContextChanger())
+
+        self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
+                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+
+        # create replay buffer
+        data_specs = (
+            specs.Array(shape=(self.cfg.agent.state_dim,), dtype=np.float32, name='observation'),
+            self.train_env.action_spec(),
+            specs.Array((1,), np.float32, 'reward'),
+            specs.Array((1,), np.float32, 'discount')
+        )
+
+        self.replay_storage = ReplayBufferStorage(data_specs,
+                                                  self.work_dir / 'buffer')
+
+        self.replay_loader = make_replay_loader(
+            self.work_dir / 'buffer', self.cfg.replay_buffer_size,
+            self.cfg.batch_size, self.cfg.replay_buffer_num_workers,
+            self.cfg.save_snapshot, self.cfg.nstep, self.cfg.discount)
+        self._replay_iter = None
+
+        self.video_recorder = VideoRecorder(
+            self.work_dir if self.cfg.save_video else None)
+
+        self.context_changer = context_changers.ReacherHardContextChanger()
+
+    def _make_expert_video(self):
+        with torch.no_grad():
+            videos = []
+            for _ in range(self.cfg.n_video):
+                self.context_changer.reset()
+
+                cam_id = random.choice(self.cfg.context_camera_ids)
+                episode = []
+                time_step = self.expert_env.reset()
+
+                with utils.change_context(self.expert_env, self.context_changer):
+                    episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+                while not time_step.last():
+                    action = self.expert.act(time_step.observation, 1, eval_mode=True)
+                    time_step = self.expert_env.step(action)
+                    with utils.change_context(self.expert_env, self.context_changer):
+                        episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
+                videos.append(episode)
+            videos = np.array(videos, dtype=np.uint8)  # n_video x T x h x w x c
+            videos = videos.transpose((0, 1, 4, 2, 3))  # n_video x T x c x h x w
+        return videos
+
+    def predict_avg_states_frames(self, fobs):
+        expert_videos = self._make_expert_video()
+        with torch.no_grad():
+            states = []
+            videos = []
+
+            fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
+            expert_videos = torch.tensor(expert_videos, device=utils.device(), dtype=torch.float)
+            for expert_video in expert_videos:
+                state = self.context_translator.translate(expert_video, fobs, return_state=True, keep_enc2=False)  # T x z
+                video = self.context_translator.translate(expert_video, fobs, return_state=False, keep_enc2=False)  # T x c x h x w
+
+                states.append(state)
+                videos.append(video)
+            states = torch.stack(states)  # n x T x z
+            videos = torch.stack(videos)  # n x T x c x h x w
+
+            avg_states = states.mean(dim=0)  # T x z
+            avg_frames = videos.mean(dim=0)  # T x c x h x w
+
+        avg_states = avg_states.cpu().numpy()
+        avg_frames = avg_frames.cpu().numpy()
+
+        return avg_states, avg_frames
+
+    def change_observation_to_state(self, time_step):
+        with torch.no_grad():
+            obs = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
+            state = self.context_translator.encode(obs.unsqueeze(0))[0].cpu().numpy()
+        return time_step._replace(observation=state)
+
+    @property
+    def global_step(self):
+        return self._global_step
+
+    @property
+    def global_episode(self):
+        return self._global_episode
+
+    @property
+    def global_frame(self):
+        return self.global_step * self.cfg.action_repeat
+
+    @property
+    def replay_iter(self):
+        if self._replay_iter is None:
+            self._replay_iter = iter(self.replay_loader)
+        return self._replay_iter
+
+    def eval(self):
+        self.rl_agent.eval()
+        step, episode, total_reward = 0, 0, 0
+        eval_until_episode = utils.Until(self.cfg.num_eval_episodes)
+
+        while eval_until_episode(episode):
+            episode_step = 0
+            time_step = self.eval_env.reset()
+            frame = time_step.observation
+            avg_states, avg_frames = self.predict_avg_states_frames(frame)
+            time_step = self.change_observation_to_state(time_step)
+            state = time_step.observation
+            target_state = avg_states[1]
+
+            self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+            while not time_step.last():
+                with torch.no_grad():
+                    state = torch.tensor(state, device=utils.device(), dtype=torch.float)
+                    target_state = torch.tensor(target_state, device=utils.device(), dtype=torch.float)
+                    action = self.rl_agent.act(state, target_state).cpu().numpy()
+
+                time_step = self.eval_env.step(action)
+                self.video_recorder.record(self.eval_env)
+                total_reward += time_step.reward
+
+                step += 1
+                episode_step += 1
+
+                time_step = self.change_observation_to_state(time_step)
+                state = time_step.observation
+
+                if episode_step + 1 < avg_states.shape[0]:
+                    target_state = avg_states[episode_step + 1]
+                else:
+                    target_state = state
+
+            episode += 1
+            self.video_recorder.save(f'{self.global_frame}.mp4')
+
+        with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
+            log('episode_reward', total_reward / episode)
+            log('episode_length', step * self.cfg.action_repeat / episode)
+            log('episode', self.global_episode)
+            log('step', self.global_step)
+
+        return total_reward / episode
+
+    def train(self):
+        # predicates
+        seed_until_step = utils.Until(self.cfg.num_seed_frames,
+                                      self.cfg.action_repeat)
+        eval_every_epoch = utils.Every(self.cfg.eval_every_epochs)
+        train_until_epoch = utils.Until(self.cfg.num_train_epochs)
+
+        time_step = self.train_env.reset()
+        time_step = self.change_observation_to_state(time_step)
+
+        self.replay_storage.add(time_step)
+
+        pbar = tqdm(total=self.cfg.num_seed_frames // self.cfg.action_repeat, initial=self.global_step)
+        while seed_until_step(self.global_step):
+            if time_step.last():
+                self._global_episode += 1
+                self.save_snapshot()
+
+                time_step = self.train_env.reset()
+                time_step = self.change_observation_to_state(time_step)
+                self.replay_storage.add(time_step)
+            action = np.asarray(np.random.uniform(-1., 1., size=(self.cfg.agent.action_shape[0],)), dtype=np.float32)
+            time_step = self.train_env.step(action)
+            time_step = self.change_observation_to_state(time_step)
+            self.replay_storage.add(time_step)
+            self._global_step += 1
+            pbar.update(1)
+
+        pbar.close()
+
+        while train_until_epoch(self.train_epoch):
+            self.rl_agent.train()
+            loader = tqdm(range(self.cfg.num_epoch_batches), postfix={'epoch': self.train_epoch})
+            train_losses = []
+
+            for _ in loader:
+                loss = self.rl_agent.update(self.replay_iter)
+                train_losses.append(loss)
+                loader.set_postfix({'epoch': self.train_epoch, 'loss': np.mean(train_losses)})
+            time.sleep(0.5)
+
+            self.logger.log_metrics({'train_loss': np.mean(train_losses)}, self.train_epoch, ty='train')
+
+            if eval_every_epoch(self.train_epoch) and self.train_epoch != 0:
+                eval_return = self.eval()
+                if eval_return >= self.eval_return:
+                    self.eval_return = eval_return
+                    self.save_snapshot(opt=True)
+
+            self.train_epoch += 1
+            self.save_snapshot()
+
+    def save_snapshot(self, opt=False):
+        if opt:
+            snapshot = self.work_dir / 'opt_snapshot.pt'
+        else:
+            snapshot = self.work_dir / 'snapshot.pt'
+        keys_to_save = ['rl_agent', 'timer', '_global_step', '_global_episode', 'train_epoch', 'eval_return']
         payload = {k: self.__dict__[k] for k in keys_to_save}
         with snapshot.open('wb') as f:
             torch.save(payload, f)

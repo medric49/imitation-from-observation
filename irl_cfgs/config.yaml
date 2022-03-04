@@ -1,0 +1,65 @@
+defaults:
+  - _self_
+  - task@_global_: reacher_hard
+  - override hydra/launcher: submitit_local
+
+im_w: 64
+im_h: 64
+
+# task settings
+expert_frame_stack: 3
+frame_stack: 1
+action_repeat: 2
+discount: 0.99
+# train settings
+
+n_video : 1
+num_epoch_batches: 100
+num_train_epochs: 10000
+num_seed_frames: 200000
+# eval
+eval_every_epochs: 10
+num_eval_episodes: 10
+# snapshot
+save_snapshot: true
+# replay buffer
+replay_buffer_size: 500000
+replay_buffer_num_workers: 4
+nstep: 1
+batch_size: 256
+# misc
+seed: 1
+save_video: true
+save_train_video: true
+use_tb: true
+# experiment
+experiment: exp
+# agent
+lr: 1e-4
+feature_dim: 50
+
+agent:
+  _target_: irl_model.IRLAgent
+  state_dim: 1024
+  repr_dim: 256
+  action_shape: ??? # to be specified later
+  lr: ${lr}
+  use_tb: ${use_tb}
+
+exp_group: ${now:%Y.%m.%d}
+exp_id: ${now:%H%M%S}
+
+hydra:
+  run:
+    dir: ./irl_exp_local/${exp_group}/${exp_id}
+  sweep:
+    dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
+    subdir: ${hydra.job.num}
+  launcher:
+    timeout_min: 4300
+    cpus_per_task: 10
+    gpus_per_node: 1
+    tasks_per_node: 1
+    mem_gb: 160
+    nodes: 1
+    submitit_folder: ./exp/${now:%Y.%m.%d}/${now:%H%M%S}_${agent_cfg.experiment}/.slurm
