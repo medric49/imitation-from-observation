@@ -14,7 +14,7 @@ discount: 0.99
 # train settings
 
 n_video : 20
-num_epoch_batches: 1000
+num_epoch_batches: 1500
 num_train_epochs: 10000
 num_seed_frames: 600000
 # eval
