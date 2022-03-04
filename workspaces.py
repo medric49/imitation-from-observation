@@ -796,13 +796,11 @@ class IRLWorkspace:
                     target_state = state
 
             episode += 1
-            self.video_recorder.save(f'{self.global_frame}.mp4')
+            self.video_recorder.save(f'{self.train_epoch}.mp4')
 
-        with self.logger.log_and_dump_ctx(self.global_frame, ty='eval') as log:
+        with self.logger.log_and_dump_ctx(self.train_epoch, ty='eval') as log:
             log('episode_reward', total_reward / episode)
             log('episode_length', step * self.cfg.action_repeat / episode)
-            log('episode', self.global_episode)
-            log('step', self.global_step)
 
         return total_reward / episode
 
