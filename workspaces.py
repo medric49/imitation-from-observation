@@ -773,7 +773,7 @@ class IRLWorkspace:
             state = time_step.observation
             target_state = avg_states[1]
 
-            self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+            self.video_recorder.init(self.eval_env)
             while not time_step.last():
                 with torch.no_grad():
                     state = torch.tensor(state, device=utils.device(), dtype=torch.float)
