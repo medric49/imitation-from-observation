@@ -796,7 +796,7 @@ class IRLWorkspace:
                     target_state = state
 
             episode += 1
-            self.video_recorder.save(f'{self.train_epoch}.mp4')
+            self.video_recorder.save(f'{self.train_epoch}_{episode}.mp4')
 
         with self.logger.log_and_dump_ctx(self.train_epoch, ty='eval') as log:
             log('episode_reward', total_reward / episode)
