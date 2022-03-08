@@ -353,14 +353,17 @@ class RLWorkspace:
         self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
-                                  context_changers.ReacherHardContextChanger())
+                                  context_changers.ReacherHardContextChanger(),
+                                  episode_len=self.cfg.episode_len)
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
-                                 context_changers.ReacherHardContextChanger())
+                                 context_changers.ReacherHardContextChanger(),
+                                 episode_len=self.cfg.episode_len)
 
         self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                   episode_len=self.cfg.episode_len)
 
         # create replay buffer
         data_specs = (

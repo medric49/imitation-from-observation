@@ -6,6 +6,7 @@ import numpy as np
 from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
+from dm_env._environment import TimeStep
 from hydra.utils import to_absolute_path
 
 
@@ -211,7 +212,31 @@ class ChangeContextWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer=None):
+class EpisodeLenWrapper(dm_env.Environment):
+    def __init__(self, env, ep_len):
+        self._env = env
+        self._ep_len = ep_len
+        self._counter = 0
+
+    def reset(self) -> TimeStep:
+        self._counter = 0
+        return self._env.reset()
+
+    def step(self, action) -> TimeStep:
+        self._counter += 1
+        time_step = self._env.step(action)
+        if self._counter == self._ep_len:
+            time_step = time_step._replace(step_type=StepType.LAST)
+        return time_step
+
+    def observation_spec(self):
+        return self._env.observation_spec()
+
+    def action_spec(self):
+        return self._env.action_spec()
+
+
+def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer=None, episode_len=None):
     domain, task = name.split('_', 1)
     # overwrite cup to ball_in_cup
     domain = dict(cup='ball_in_cup').get(domain, domain)
@@ -248,4 +273,6 @@ def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, 
     # stack several frames
     env = FrameStackWrapper(env, frame_stack, pixels_key)
     env = ExtendedTimeStepWrapper(env)
+    if episode_len is not None:
+        env = EpisodeLenWrapper(env, episode_len)
     return env
