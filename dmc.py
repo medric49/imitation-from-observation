@@ -235,6 +235,9 @@ class EpisodeLenWrapper(dm_env.Environment):
     def action_spec(self):
         return self._env.action_spec()
 
+    def __getattr__(self, name):
+        return getattr(self._env, name)
+
 
 def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer=None, episode_len=None):
     domain, task = name.split('_', 1)
