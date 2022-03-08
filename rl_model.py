@@ -15,9 +15,9 @@ class Encoder(nn.Module):
 
         self.encoder = nn.Sequential(
             nn.Linear(state_dim, repr_dim),
+            nn.BatchNorm1d(repr_dim),
             nn.LeakyReLU(),
             nn.Linear(repr_dim, repr_dim),
-            nn.LeakyReLU()
         )
         self.apply(utils.weight_init)
 

@@ -25,7 +25,7 @@ class CTNet(nn.Module):
         self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
         self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
     
-    def translate(self, video1, fobs2, return_state=False, keep_enc2=True):
+    def translate(self, video1, fobs2, keep_enc2=True):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # T x c x h x w
@@ -40,17 +40,15 @@ class CTNet(nn.Module):
 
         z3_seq = self.t(z1_seq, fz2)
 
-        if return_state:
-            return z3_seq.squeeze(dim=1)
-
         video2 = [self.dec(z3_seq[t], c1, c2, c3, c4) for t in range(T)]  # T x c x h x w
         video2 = torch.stack(video2)
 
+        z3_seq = z3_seq.squeeze(dim=1)
         video2 = video2.squeeze(dim=1)
         if keep_enc2:
             video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
-        return video2
+        return z3_seq, video2
 
     def evaluate(self, video1, video2):
         T = video1.shape[1]

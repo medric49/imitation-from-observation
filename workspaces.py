@@ -412,21 +412,19 @@ class RLWorkspace:
         expert_videos = self._make_expert_video()
         with torch.no_grad():
             states = []
-            videos = []
+            frames = []
 
             fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
             expert_videos = torch.tensor(expert_videos, device=utils.device(), dtype=torch.float)
             for expert_video in expert_videos:
-                state = self.context_translator.translate(expert_video, fobs, return_state=True, keep_enc2=False)  # T x z
-                video = self.context_translator.translate(expert_video, fobs, return_state=False, keep_enc2=False)  # T x c x h x w
-
+                state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=False)
                 states.append(state)
-                videos.append(video)
+                frames.append(frame)
             states = torch.stack(states)  # n x T x z
-            videos = torch.stack(videos)  # n x T x c x h x w
+            frames = torch.stack(frames)  # n x T x c x h x w
 
             avg_states = states.mean(dim=0)  # T x z
-            avg_frames = videos.mean(dim=0)  # T x c x h x w
+            avg_frames = frames.mean(dim=0)  # T x c x h x w
 
         avg_states = avg_states.cpu().numpy()
         avg_frames = avg_frames.cpu().numpy()
@@ -440,9 +438,8 @@ class RLWorkspace:
         return time_step._replace(observation=state)
 
     def compute_reward(self, state, frame, target_state, target_frame):
-        frame = frame.astype(np.float).flatten()
-        target_frame = target_frame.astype(np.float).flatten()
-
+        # frame = frame.astype(np.float).flatten()
+        # target_frame = target_frame.astype(np.float).flatten()
         return - np.linalg.norm(state - target_state)
 
     @property
