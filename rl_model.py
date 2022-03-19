@@ -1,7 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -105,7 +101,6 @@ class RLAgent(nn.Module):
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr=lr)
 
-        # data augmentation
 
         self.train()
         self.critic_target.train()
@@ -217,3 +212,133 @@ class RLAgent(nn.Module):
         with open(file, 'rb') as f:
             payload = torch.load(f)
         return payload['agent']
+
+
+class ACAgent(nn.Module):
+    def __init__(self, state_dim, repr_dim, action_shape, feature_dim, hidden_dim, lr, stddev_schedule, stddev_clip, critic_target_tau):
+        super(ACAgent, self).__init__()
+
+        self.stddev_schedule = stddev_schedule
+        self.stddev_clip = stddev_clip
+        self.critic_target_tau = critic_target_tau
+
+        self.encoder = Encoder(state_dim, repr_dim)
+        self.actor = Actor(repr_dim, action_shape, feature_dim, hidden_dim)
+        self.critic = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
+        self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
+        self.critic_target.load_state_dict(self.critic.state_dict())
+
+        self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr)
+        self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr)
+        self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr)
+
+        self.train()
+        self.critic_target.train()
+
+    def train(self, training=True):
+        self.training = training
+        self.encoder.train(training)
+        self.actor.train(training)
+        self.critic.train(training)
+
+    def eval(self):
+        self.train(False)
+
+    def act(self, state, step, eval_mode):
+        state = state.unsqueeze(0)
+        state = self.encoder.encoder(state)
+        stddev = utils.schedule(self.stddev_schedule, step)
+        dist = self.actor(state, stddev)
+        if eval_mode:
+            action = dist.mean
+        else:
+            action = dist.sample()
+        return action.cpu().numpy()[0]
+
+    def update_critic(self, state, action, reward, discount, next_state, terminal, step):
+        metrics = dict()
+
+        with torch.no_grad():
+            next_state = self.encoder(next_state)
+            stddev = utils.schedule(self.stddev_schedule, step)
+            dist = self.actor(next_state, stddev)
+            next_action = dist.sample(clip=self.stddev_clip)
+            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            target_V = torch.min(target_Q1, target_Q2)
+            target_Q = reward + (discount * target_V * (1 - terminal))
+
+        state = self.encoder(state)
+        Q1, Q2 = self.critic(state, action)
+        critic_loss = F.mse_loss(Q1, target_Q) + F.mse_loss(Q2, target_Q)
+
+        metrics['critic_target_q'] = target_Q.mean().item()
+        metrics['critic_q1'] = Q1.mean().item()
+        metrics['critic_q2'] = Q2.mean().item()
+        metrics['critic_loss'] = critic_loss.item()
+
+        self.encoder_opt.zero_grad(set_to_none=True)
+        self.critic_opt.zero_grad(set_to_none=True)
+        critic_loss.backward()
+        self.critic_opt.step()
+        self.encoder_opt.step()
+
+        return metrics
+
+    def update_actor(self, state, action, advantage, step):
+        metrics = dict()
+
+        stddev = utils.schedule(self.stddev_schedule, step)
+        dist = self.actor(state, stddev)
+
+        log_prob = dist.log_prob(action)
+        actor_loss = - (log_prob * advantage).sum()
+
+        self.actor_opt.zero_grad(set_to_none=True)
+        actor_loss.backward()
+        self.actor_opt.step()
+
+        if self.use_tb:
+            metrics['actor_loss'] = actor_loss.item()
+            metrics['actor_logprob'] = log_prob.sum(-1, keepdim=True).mean().item()
+            metrics['actor_ent'] = dist.entropy().sum(dim=-1).mean().item()
+
+        return metrics
+
+    def update(self, replay_buffer, batch_size, nstep, step):
+        metrics = dict()
+
+        batch = replay_buffer.sample_recent_data(batch_size, nstep)
+        state, action, reward, discount, next_state, terminal = utils.to_torch(
+            batch, utils.device())
+
+        metrics['batch_reward'] = reward.mean().item()
+
+        # update critic
+        metrics.update(
+            self.update_critic(state, action, reward, discount, next_state, terminal, step))
+
+        with torch.no_grad():
+
+            next_state = self.encoder(next_state)
+            stddev = utils.schedule(self.stddev_schedule, step)
+            dist = self.actor(next_state, stddev)
+            next_action = dist.sample(clip=self.stddev_clip)
+            q1, q2 = self.critic(next_state, next_action)
+            next_value = torch.min(q1, q2)
+
+            state = self.encoder(state)
+            q1, q2 = self.critic(state, action)
+            value = torch.min(q1, q2)
+
+            advantage = value - next_value
+
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
+        # update actor
+        metrics.update(self.update_actor(state, action, advantage, step))
+
+        # update critic target
+        utils.soft_update_params(self.critic, self.critic_target,
+                                 self.critic_target_tau)
+
+        return metrics
