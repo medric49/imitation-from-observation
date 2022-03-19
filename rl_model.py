@@ -297,10 +297,9 @@ class ACAgent(nn.Module):
         actor_loss.backward()
         self.actor_opt.step()
 
-        if self.use_tb:
-            metrics['actor_loss'] = actor_loss.item()
-            metrics['actor_logprob'] = log_prob.sum(-1, keepdim=True).mean().item()
-            metrics['actor_ent'] = dist.entropy().sum(dim=-1).mean().item()
+        metrics['actor_loss'] = actor_loss.item()
+        metrics['actor_logprob'] = log_prob.sum(-1, keepdim=True).mean().item()
+        metrics['actor_ent'] = dist.entropy().sum(dim=-1).mean().item()
 
         return metrics
 
