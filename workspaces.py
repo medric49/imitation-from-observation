@@ -300,7 +300,7 @@ class CTWorkspace:
                     video2 = video2.to(device=utils.device())
                     video1 = video1[0]  # T x c x h x w
                     fobs2 = video2[0][0]  # c x h x w
-                    video2 = self.context_translator.translate(video1, fobs2)
+                    _, video2 = self.context_translator.translate(video1, fobs2)
                     video.make_video_from_frames(self.work_dir / f'eval_video/{self._epoch}_expert.mp4', video1.cpu().numpy())
                     video.make_video_from_frames(self.work_dir / f'eval_video/{self._epoch}_agent.mp4', video2.cpu().numpy())
                 self.context_translator.train()

@@ -48,6 +48,8 @@ class CTNet(nn.Module):
         if keep_enc2:
             video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
+        video2[video2 > 255.] = 255.
+        video2[video2 < 0.] = 0.
         return z3_seq, video2
 
     def evaluate(self, video1, video2):
