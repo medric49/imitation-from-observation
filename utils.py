@@ -205,4 +205,9 @@ class change_context:
         self.context_changer.reset_env(self.env)
 
 
+def normalize(data, mean, std, eps=1e-8):
+    return (data - mean) / (std + eps)
 
+
+def unnormalize(data, mean, std):
+    return data * std + mean

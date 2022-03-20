@@ -133,6 +133,10 @@ class RLAgent(nn.Module):
             next_action = dist.sample(clip=self.stddev_clip)
             target_Q1, target_Q2 = self.critic_target(next_state, next_action)
             target_V = torch.min(target_Q1, target_Q2)
+
+            target_V = utils.normalize(target_V, target_V.mean(), target_V.std())
+            reward = utils.normalize(reward, reward.mean(), reward.std())
+
             target_Q = reward + (discount * target_V)
 
         Q1, Q2 = self.critic(state, action)
