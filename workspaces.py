@@ -441,8 +441,8 @@ class RLWorkspace:
         return time_step._replace(observation=state)
 
     def compute_reward(self, state, frame, target_state, target_frame):
-        frame = frame.astype(np.float).flatten()
-        target_frame = target_frame.astype(np.float).flatten()
+        frame = frame.astype(np.float).flatten() / 255.
+        target_frame = target_frame.astype(np.float).flatten() / 255.
         return - np.linalg.norm(state - target_state) - np.linalg.norm(frame - target_frame)
 
     @property
@@ -471,7 +471,7 @@ class RLWorkspace:
             time_step = self.eval_env.reset()
             time_step = self.change_observation_to_state(time_step)
 
-            self.video_recorder.init(self.eval_env, enabled=(episode == 0))
+            self.video_recorder.init(self.eval_env)
             while not time_step.last():
                 with torch.no_grad(), utils.eval_mode(self.rl_agent):
                     state = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
