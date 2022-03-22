@@ -10,6 +10,7 @@ class Encoder(nn.Module):
         super().__init__()
 
         self.encoder = nn.Sequential(
+            nn.BatchNorm1d(state_dim),
             nn.Linear(state_dim, repr_dim),
             nn.BatchNorm1d(repr_dim),
             nn.LeakyReLU(),
