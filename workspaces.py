@@ -441,9 +441,11 @@ class RLWorkspace:
         return time_step._replace(observation=state)
 
     def compute_reward(self, state, frame, target_state, target_frame):
-        frame = frame.astype(np.float).flatten() / 255.
-        target_frame = target_frame.astype(np.float).flatten() / 255.
-        return - np.linalg.norm(state - target_state) - np.linalg.norm(frame - target_frame)
+        reward = - np.linalg.norm(state - target_state)
+        # frame = frame.astype(np.float).flatten() / 255.
+        # target_frame = target_frame.astype(np.float).flatten() / 255.
+        # reward += -np.linalg.norm(frame - target_frame)
+        return reward
 
     @property
     def global_step(self):
