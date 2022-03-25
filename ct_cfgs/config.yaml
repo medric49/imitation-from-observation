@@ -4,11 +4,11 @@ defaults:
 
 seed: 1
 
-num_epochs: 15000
+num_epochs: 25000
 eval_every_epochs: 20
 num_evaluations: 5
 batch_size: 32
-episode_len: 25
+episode_len: 30
 num_workers: 4
 
 same_video: false

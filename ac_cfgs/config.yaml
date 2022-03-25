@@ -13,12 +13,12 @@ action_repeat: 2
 discount: 0.99
 # train settings
 
-episode_len: 25
-n_video : 25
+episode_len: 30
+n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
-num_eval_episodes: 15
+num_eval_episodes: 32
 # snapshot
 save_snapshot: true
 # replay buffer
@@ -29,7 +29,7 @@ batch_size: 512
 # misc
 seed: 1
 save_video: true
-save_train_video: true
+save_train_video: false
 use_tb: true
 # experiment
 experiment: exp

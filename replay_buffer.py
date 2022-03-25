@@ -188,7 +188,7 @@ class ReplayBuffer(IterableDataset):
                 rewards.append(reward[1:-nstep + 1])
         rewards = np.concatenate(rewards)
 
-        discounts = np.ones((observations.shape[0], ), dtype=np.float32) * (self._discount ** nstep)
+        discounts = np.ones((observations.shape[0], 1), dtype=np.float32) * (self._discount ** nstep)
 
         terminals = []
         for episode in episodes:
@@ -196,7 +196,7 @@ class ReplayBuffer(IterableDataset):
             terminal[-1] = 1
             terminal = terminal[nstep:]
             terminals.append(terminal)
-        terminals = np.concatenate(terminals)
+        terminals = np.concatenate(terminals).reshape((-1, 1))
 
         obs = observations[-batch_size:]
         action = actions[-batch_size:]
