@@ -10,7 +10,7 @@ im_h: 64
 expert_frame_stack: 3
 frame_stack: 1
 action_repeat: 2
-discount: 0.99
+discount: 0.9
 # train settings
 
 episode_len: 30
@@ -18,7 +18,7 @@ n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
-num_eval_episodes: 32
+num_eval_episodes: 10
 # snapshot
 save_snapshot: true
 # replay buffer

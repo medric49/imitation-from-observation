@@ -263,6 +263,7 @@ class ACAgent(nn.Module):
         metrics = dict()
 
         with torch.no_grad():
+            print(next_state.shape)
             next_state = self.encoder(next_state)
             stddev = utils.schedule(self.stddev_schedule, step)
             dist = self.actor(next_state, stddev)
@@ -310,38 +311,41 @@ class ACAgent(nn.Module):
     def update(self, replay_buffer, batch_size, nstep, step):
         metrics = dict()
 
-        batch = replay_buffer.sample_recent_data(batch_size, nstep)
-        state, action, reward, discount, next_state, terminal = utils.to_torch(
-            batch, utils.device())
+        for _ in range(3):
 
-        metrics['batch_reward'] = reward.mean().item()
+            batch = replay_buffer.sample_recent_data(batch_size, nstep)
+            state, action, reward, discount, next_state, terminal = utils.to_torch(
+                batch, utils.device())
 
-        # update critic
-        metrics.update(
-            self.update_critic(state, action, reward, discount, next_state, terminal, step))
+            metrics['batch_reward'] = reward.mean().item()
 
-        with torch.no_grad():
 
-            next_state = self.encoder(next_state)
-            stddev = utils.schedule(self.stddev_schedule, step)
-            dist = self.actor(next_state, stddev)
-            next_action = dist.sample(clip=self.stddev_clip)
-            q1, q2 = self.critic(next_state, next_action)
-            next_value = torch.min(q1, q2)
+            # update critic
+            metrics.update(
+                self.update_critic(state, action, reward, discount, next_state, terminal, step))
 
-            state = self.encoder(state)
-            q1, q2 = self.critic(state, action)
-            value = torch.min(q1, q2)
+            with torch.no_grad():
 
-            advantage = value - next_value
+                next_state = self.encoder(next_state)
+                stddev = utils.schedule(self.stddev_schedule, step)
+                dist = self.actor(next_state, stddev)
+                next_action = dist.sample(clip=self.stddev_clip)
+                q1, q2 = self.critic(next_state, next_action)
+                next_value = torch.min(q1, q2)
 
-            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+                state = self.encoder(state)
+                q1, q2 = self.critic(state, action)
+                value = torch.min(q1, q2)
 
-        # update actor
-        metrics.update(self.update_actor(state, action, advantage, step))
+                advantage = value - next_value
 
-        # update critic target
-        utils.soft_update_params(self.critic, self.critic_target,
-                                 self.critic_target_tau)
+                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
+
+            # update actor
+            metrics.update(self.update_actor(state, action, advantage, step))
+
+            # update critic target
+            utils.soft_update_params(self.critic, self.critic_target,
+                                     self.critic_target_tau)
 
         return metrics
