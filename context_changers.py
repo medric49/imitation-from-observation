@@ -12,8 +12,6 @@ class ReacherHardContextChanger:
 
         self.target_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
         self.arm_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
-        self.root_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
-        self.finger_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
 
         self.c1_pos = [random.random() * 0.6 - 0.3, random.random() * 0.6 - 0.3, 2.5e-6]
         self.c2_pos = [random.random() * 0.6 - 0.3, random.random() * 0.6 - 0.3, 2.5e-6]
@@ -39,8 +37,8 @@ class ReacherHardContextChanger:
         env.physics.named.model.geom_rgba['target'] = self.target_color
         env.physics.named.model.geom_rgba['arm'] = self.arm_color
         env.physics.named.model.geom_rgba['hand'] = self.arm_color
-        env.physics.named.model.geom_rgba['root'] = self.root_color
-        env.physics.named.model.geom_rgba['finger'] = self.finger_color
+        env.physics.named.model.geom_rgba['root'] = self.arm_color
+        env.physics.named.model.geom_rgba['finger'] = self.arm_color
 
         env.physics.named.data.geom_xpos['c1'] = self.c1_pos
         env.physics.named.data.geom_xpos['c2'] = self.c2_pos
