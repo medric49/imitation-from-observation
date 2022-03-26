@@ -263,7 +263,6 @@ class ACAgent(nn.Module):
         metrics = dict()
 
         with torch.no_grad():
-            print(next_state.shape)
             next_state = self.encoder(next_state)
             stddev = utils.schedule(self.stddev_schedule, step)
             dist = self.actor(next_state, stddev)
