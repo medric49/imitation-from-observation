@@ -24,7 +24,7 @@ save_snapshot: true
 # replay buffer
 replay_buffer_size: 500000
 replay_buffer_num_workers: 1
-nstep: 1
+nstep: 20
 batch_size: 512
 # misc
 seed: 1
@@ -48,7 +48,7 @@ agent:
   feature_dim: ${feature_dim}
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
-  with_target_critic: false
+  with_target_critic: true
 
 exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
