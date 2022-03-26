@@ -14,7 +14,7 @@ discount: 0.9
 # train settings
 
 episode_len: 30
-n_video : 10
+n_video : 1
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
@@ -48,6 +48,7 @@ agent:
   feature_dim: ${feature_dim}
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
+  with_target_critic: false
 
 exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}

@@ -219,25 +219,28 @@ class RLAgent(nn.Module):
 
 
 class ACAgent(nn.Module):
-    def __init__(self, state_dim, repr_dim, action_shape, feature_dim, hidden_dim, lr, stddev_schedule, stddev_clip, critic_target_tau):
+    def __init__(self, state_dim, repr_dim, action_shape, feature_dim, hidden_dim, lr, stddev_schedule, stddev_clip, critic_target_tau, with_target_critic):
         super(ACAgent, self).__init__()
 
         self.stddev_schedule = stddev_schedule
         self.stddev_clip = stddev_clip
         self.critic_target_tau = critic_target_tau
+        self.with_target_critic = with_target_critic
 
         self.encoder = Encoder(state_dim, repr_dim)
         self.actor = Actor(repr_dim, action_shape, feature_dim, hidden_dim)
         self.critic = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic_target.load_state_dict(self.critic.state_dict())
+
+        if self.with_target_critic:
+            self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
+            self.critic_target.load_state_dict(self.critic.state_dict())
+            self.critic_target.train()
 
         self.encoder_opt = torch.optim.Adam(self.encoder.parameters(), lr)
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr)
         self.critic_opt = torch.optim.Adam(self.critic.parameters(), lr)
 
         self.train()
-        self.critic_target.train()
 
     def train(self, training=True):
         self.training = training
@@ -267,7 +270,10 @@ class ACAgent(nn.Module):
             stddev = utils.schedule(self.stddev_schedule, step)
             dist = self.actor(next_state, stddev)
             next_action = dist.sample(clip=self.stddev_clip)
-            target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            if self.with_target_critic:
+                target_Q1, target_Q2 = self.critic_target(next_state, next_action)
+            else:
+                target_Q1, target_Q2 = self.critic(next_state, next_action)
             target_V = torch.min(target_Q1, target_Q2)
             target_Q = reward + (discount * target_V * (1 - terminal))
 
@@ -344,7 +350,8 @@ class ACAgent(nn.Module):
             metrics.update(self.update_actor(state, action, advantage, step))
 
             # update critic target
-            utils.soft_update_params(self.critic, self.critic_target,
-                                     self.critic_target_tau)
+            if self.with_target_critic:
+                utils.soft_update_params(self.critic, self.critic_target,
+                                         self.critic_target_tau)
 
         return metrics
