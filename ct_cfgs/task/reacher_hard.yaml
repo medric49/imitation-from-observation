@@ -1,3 +1,3 @@
-train_video_dir: 'videos/reacher_hard_v4/train'
-valid_video_dir: 'videos/reacher_hard_v4/valid'
+train_video_dir: 'videos/reacher_hard_v5/train'
+valid_video_dir: 'videos/reacher_hard_v5/valid'
 train_cams: [0]
