@@ -53,13 +53,15 @@ python train.py task=reacher_hard
 tensorboard --logdir exp_local
 ```
 * Copy-paste the `snapshot.pt` file from the experiment folder `exp_local` into the `experts` folder (create it in the root if it doesn't exist) and name it `reacher_hard.pt`
-* Generate videos of expert acting in many random contexts
+
+### Context translation model training
+
+* Generate demonstrations of the expert acting in many random contexts
 ```shell
 python generate_reacher_hard_expert_video.py
 ```
-The final dataset is stored in `videos/reacher_hard` and split into `train` and `valid` datasets.
+The demonstration dataset is stored in `videos/reacher_hard` and split into `train` and `valid` datasets.
 
-### Context translation model training
 * Train the context translation model on the Reacher Hard expert videos
 ```shell
 python train_ct.py task=reacher_hard
@@ -84,7 +86,7 @@ tensorboard --logdir ac_local
 ```
 
 ## Acknowledgements
-* We override Denis Yarats's code in the [DrQv2 project](https://github.com/facebookresearch/drqv2) for this project
+* We reuse Denis Yarats's code of the [DrQv2 project](https://github.com/facebookresearch/drqv2) for this project
 
 ## References
 * [Mastering Visual Continuous Control: Improved Data-Augmented Reinforcement Learning](https://arxiv.org/pdf/2107.09645.pdf)
