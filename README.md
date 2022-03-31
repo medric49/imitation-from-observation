@@ -40,7 +40,7 @@ conda activate ifo
 ```
 
 
-For the following we consider on the task Reacher Hard, but the process can be used with any other tasks.
+For the following we consider only the task Reacher Hard, but this process can be applied with any other tasks.
 
 ### Expert Training (this part is optional, trained experts are provided in `experts` folder )
 * Train the expert
