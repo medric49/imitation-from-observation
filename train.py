@@ -1,10 +1,6 @@
 import warnings
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
-import os
-os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
-os.environ['MUJOCO_GL'] = 'egl'
-
 import torch
 
 
@@ -139,6 +135,8 @@ class Workspace:
                                       self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
+        self._global_step = 0
+        self._global_episode = 0
         time_step = self.train_env.reset()
         self.replay_storage.add(time_step)
         self.train_video_recorder.init(time_step.observation)
