@@ -20,7 +20,7 @@ Demo of experts trained on Finger Spin, Finger Turn and Reacher tasks
 * We train a context translation model using videos of the trained expert
 
 The Context translation model which takes as input a demonstration of an expert in a source context, the first observation of the imitator agent in the target context, and outputs a predicted sequence of next observations in this target context.
-We train this model with this [Imitation from Observation](https://arxiv.org/pdf/2107.09645.pdf) algorithm.
+We train this model with this [Imitation from Observation](https://arxiv.org/pdf/1707.03374.pdf) algorithm.
 <p align="center">
 <img src="demo/context_translation/expert.png">
 <br>
