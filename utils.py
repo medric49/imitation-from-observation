@@ -151,7 +151,7 @@ def device():
 
 def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=200):
     root_dir = Path(root_dir)
-    root_dir.mkdir(exist_ok=True)
+    root_dir.mkdir(parents=True, exist_ok=True)
 
     expert.train(training=False)
 
