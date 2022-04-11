@@ -3,6 +3,9 @@ from typing import Any, NamedTuple
 
 import dm_env
 import numpy as np
+import os
+os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
+os.environ['MUJOCO_GL'] = 'egl'
 from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs
