@@ -316,42 +316,41 @@ class ACAgent(nn.Module):
     def update(self, replay_buffer, batch_size, nstep, step):
         metrics = dict()
 
+        batch = replay_buffer.sample_recent_data(batch_size, nstep)
+        state, action, reward, discount, next_state, terminal = utils.to_torch(
+            batch, utils.device())
+        metrics['batch_reward'] = reward.mean().item()
+
+        critic_metrics = None
         for _ in range(3):
+            critic_metrics = self.update_critic(state, action, reward, discount, next_state, terminal, step)
+        metrics.update(critic_metrics)
 
-            batch = replay_buffer.sample_recent_data(batch_size, nstep)
-            state, action, reward, discount, next_state, terminal = utils.to_torch(
-                batch, utils.device())
+        with torch.no_grad():
+            next_state = self.encoder(next_state)
+            stddev = utils.schedule(self.stddev_schedule, step)
+            dist = self.actor(next_state, stddev)
+            next_action = dist.sample(clip=self.stddev_clip)
+            q1, q2 = self.critic(next_state, next_action)
+            next_value = torch.min(q1, q2)
 
-            metrics['batch_reward'] = reward.mean().item()
+            state = self.encoder(state)
+            q1, q2 = self.critic(state, action)
+            value = torch.min(q1, q2)
 
+            advantage = value - next_value
 
-            # update critic
-            metrics.update(
-                self.update_critic(state, action, reward, discount, next_state, terminal, step))
+            advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
 
-            with torch.no_grad():
-
-                next_state = self.encoder(next_state)
-                stddev = utils.schedule(self.stddev_schedule, step)
-                dist = self.actor(next_state, stddev)
-                next_action = dist.sample(clip=self.stddev_clip)
-                q1, q2 = self.critic(next_state, next_action)
-                next_value = torch.min(q1, q2)
-
-                state = self.encoder(state)
-                q1, q2 = self.critic(state, action)
-                value = torch.min(q1, q2)
-
-                advantage = value - next_value
-
-                advantage = (advantage - advantage.mean()) / (advantage.std() + 1e-8)
-
+        actor_metrics = None
+        for _ in range(3):
             # update actor
-            metrics.update(self.update_actor(state, action, advantage, step))
+            actor_metrics = self.update_actor(state, action, advantage, step)
+        metrics.update(actor_metrics)
 
-            # update critic target
-            if self.with_target_critic:
-                utils.soft_update_params(self.critic, self.critic_target,
-                                         self.critic_target_tau)
+        # update critic target
+        if self.with_target_critic:
+            utils.soft_update_params(self.critic, self.critic_target,
+                                     self.critic_target_tau)
 
         return metrics
