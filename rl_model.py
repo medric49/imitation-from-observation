@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -354,3 +356,10 @@ class ACAgent(nn.Module):
                                      self.critic_target_tau)
 
         return metrics
+
+    @staticmethod
+    def load(file):
+        snapshot = Path(file)
+        with snapshot.open('rb') as f:
+            payload = torch.load(f)
+        return payload['agent']
