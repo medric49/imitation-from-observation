@@ -77,7 +77,7 @@ class CTNet(nn.Module):
         z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
         z2_seq = torch.stack(z2_seq)
 
-        for t in range(T):
+        for t in range(1, T):
             obs2 = video2[t]
             obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
             obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
