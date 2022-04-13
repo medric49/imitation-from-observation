@@ -85,13 +85,13 @@ class CTNet(nn.Module):
             obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
             obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
 
-            l_trans += F.mse_loss(torch.flatten(obs_z3 - prev_obs_z3, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
-            l_rec += F.mse_loss(torch.flatten(obs_z2 - prev_obs_z2, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
+            l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1)) + F.mse_loss(torch.flatten(obs_z3 - prev_obs_z3, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
+            l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1)) + F.mse_loss(torch.flatten(obs_z2 - prev_obs_z2, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
-            prev_obs_z3 = obs_z3
-            prev_obs_z2 = obs_z2
-            prev_obs2 = obs2
+            # prev_obs_z3 = obs_z3
+            # prev_obs_z2 = obs_z2
+            # prev_obs2 = obs2
 
         loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align
 
