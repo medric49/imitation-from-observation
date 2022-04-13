@@ -303,7 +303,7 @@ class ACAgent(nn.Module):
         dist = self.actor(state, stddev)
 
         log_prob = dist.log_prob(action)
-        actor_loss = - (log_prob * advantage).sum()
+        actor_loss = - (log_prob * advantage).mean()
 
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
