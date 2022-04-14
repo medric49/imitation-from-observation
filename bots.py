@@ -44,7 +44,7 @@ class ArmEnv(dm_env.Environment):
         action[action < 0] = -ArmEnv.DELTA_MOVE
         action[action > 0] = ArmEnv.DELTA_MOVE
         self._location += action
-        self._location = np.clip(self._location, np.array([.15, -.25, .06]), np.array([.25, .25, .18]))
+        self._location = np.clip(self._location, np.array([.15, -.25, .06]), np.array([.35, .25, .18]))
         self._env.arm.set_ee_pose_components(x=self._location[0], y=self._location[1], z=self._location[2], pitch=np.pi/4, moving_time=ArmEnv.MOVING_TIME)
 
         self.update_observation()
