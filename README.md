@@ -77,12 +77,12 @@ tensorboard --logdir ct_local
 ### Imitator Agent Training
 * Train the imitator agent by using the expert as demonstration video provider and the context translation model as context translator
 ```shell
-python train_ac.py task=reacher_hard
+python train_rl.py task=reacher_hard
 ```
 * Watch evaluation videos in the `eval` folder of the experiment folder
 * Watch the training on Tensorboard
 ```shell
-tensorboard --logdir ac_local
+tensorboard --logdir rl_local
 ```
 
 ## Acknowledgements
