@@ -16,5 +16,5 @@ if __name__ == '__main__':
 
     utils.generate_video_from_expert(
         'videos/walker_run', expert, env, context_changer, cam_ids=[0],
-        num_frames=100, num_train=30000, num_valid=6000)
+        num_frames=50, num_train=30000, num_valid=6000)
 
