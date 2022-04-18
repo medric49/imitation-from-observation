@@ -1,5 +1,7 @@
 import random
 
+import numpy as np
+
 
 class ReacherHardContextChanger:
 
@@ -73,3 +75,23 @@ class ReacherHardContextChanger:
         env.physics.named.model.geom_rgba['c3'] = [0, 0, 0, 0]
         env.physics.named.model.geom_rgba['c4'] = [0, 0, 0, 0]
         env.physics.named.model.geom_rgba['c5'] = [0, 0, 0, 0]
+
+
+class WalkerRunContextChanger:
+
+    def __init__(self):
+        self.reset()
+
+    def reset(self):
+        # self.ground_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
+        self.floor = np.random.uniform([0., 0., 0., 1.], [0.5, 0.5, 0.5, 1])
+
+
+    def change_env(self, env):
+        env.physics.named.model.mat_texid['grid'] = -1
+        env.physics.named.model.geom_rgba['floor'] = self.floor
+
+
+    def reset_env(self, env):
+        env.physics.named.model.mat_texid['grid'] = 1
+        env.physics.named.model.geom_rgba['floor'] = [0.5, 0.5, 0.5, 1]
