@@ -217,7 +217,7 @@ class RLAgent(nn.Module):
     def load(file):
         with open(file, 'rb') as f:
             payload = torch.load(f)
-        return payload['agent']
+        return payload['rl_agent']
 
 
 class ACAgent(nn.Module):
