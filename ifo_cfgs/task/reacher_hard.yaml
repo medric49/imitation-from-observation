@@ -1,0 +1,12 @@
+defaults:
+  - easy
+  - _self_
+
+task_name: reacher_hard
+
+expert_file: experts/reacher_hard.pt
+ct_file: ct/reacher_hard.pt
+xml_path: domain_xmls/reacher.xml
+
+context_camera_ids: [0]
+learner_camera_id: 0
