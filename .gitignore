@@ -13,6 +13,7 @@ venv
 *.out
 irl_exp_local
 ac_exp_local
+ifo_exp_local
 interbotix_ros_manipulators
 
 data

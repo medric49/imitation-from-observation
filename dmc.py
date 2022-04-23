@@ -179,13 +179,13 @@ class EncodeStackWrapper(dm_env.Environment):
         return videos
 
     def predict_avg_states_frames(self, fobs):
-        expert_videos = self.make_expert_video()
+        self.expert_videos = self.make_expert_video()
         with torch.no_grad():
             states = []
             frames = []
 
             fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
-            expert_videos = torch.tensor(expert_videos, device=utils.device(), dtype=torch.float)
+            expert_videos = torch.tensor(self.expert_videos, device=utils.device(), dtype=torch.float)
             for expert_video in expert_videos:
                 state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=False)
                 states.append(state)
@@ -249,6 +249,131 @@ class EncodeStackWrapper(dm_env.Environment):
 
     def observation_spec(self):
         return specs.Array(shape=(self.state_dim * (self.frame_stack + 1),), dtype=np.float32, name='observation')
+
+    def action_spec(self):
+        return self._env.action_spec()
+
+    def __getattr__(self, name):
+        return getattr(self._env, name)
+
+class CTStackWrapper(dm_env.Environment):
+    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, frame_stack, dist_reward):
+        self._env = env
+
+        self.context_changer = context_changers.ReacherHardContextChanger()
+        self.expert: drqv2.DrQV2Agent = expert
+        self.expert.train(False)
+        self.context_translator: ct_model.CTNet = context_translator
+        self.context_translator.eval()
+        self.frame_stack = frame_stack
+
+        self.expert_env = expert_env
+
+        self.context_camera_ids = context_camera_ids
+        self.n_video = n_video
+
+        self.im_w = im_w
+        self.im_h = im_h
+        self.dist_reward = dist_reward
+
+        self.avg_states = None
+        self.avg_frames = None
+
+        self.init_channel = self._env.observation_spec().shape[0] // self.frame_stack
+
+        self.step_id = None
+
+    def make_expert_video(self):
+        with torch.no_grad():
+            videos = []
+            for _ in range(self.n_video):
+                self.context_changer.reset()
+
+                cam_id = random.choice(self.context_camera_ids)
+                episode = []
+                time_step = self.expert_env.reset()
+
+                with utils.change_context(self.expert_env, self.context_changer):
+                    episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+                while not time_step.last():
+                    action = self.expert.act(time_step.observation, 1, eval_mode=True)
+                    time_step = self.expert_env.step(action)
+                    with utils.change_context(self.expert_env, self.context_changer):
+                        episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+                videos.append(episode)
+            videos = np.array(videos, dtype=np.uint8)
+            videos = videos.transpose((0, 1, 4, 2, 3))
+        return videos
+
+    def predict_avg_states_frames(self, fobs):
+        self.expert_videos = self.make_expert_video()
+        with torch.no_grad():
+            states = []
+            frames = []
+
+            fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
+            expert_videos = torch.tensor(self.expert_videos, device=utils.device(), dtype=torch.float)
+            for expert_video in expert_videos:
+                state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=False)
+                states.append(state)
+                frames.append(frame)
+            states = torch.stack(states)  # n x T x z
+            frames = torch.stack(frames)  # n x T x c x h x w
+
+            avg_states = states.mean(dim=0)  # T x z
+            avg_frames = frames.mean(dim=0)  # T x c x h x w
+
+        avg_states = avg_states.cpu().numpy()
+        avg_frames = avg_frames.cpu().numpy()
+
+        return avg_states, avg_frames
+
+    def encode(self, observation):
+        frames = []
+        for i in range(self.frame_stack):
+            index = i * self.init_channel
+            frames.append(observation[index: index + self.init_channel, :, :])
+        frames = np.array(frames)
+        frames = torch.tensor(frames, device=utils.device(), dtype=torch.float)
+        with torch.no_grad():
+            state = self.context_translator.encode(frames)
+            state = state.view((-1,)).cpu().numpy()
+        return state
+
+    def reset(self) -> TimeStep:
+        time_step = self._env.reset()
+        self.step_id = 0
+
+        fobs = time_step.observation[-self.init_channel:]
+        self.avg_states, self.avg_frames = self.predict_avg_states_frames(fobs)
+
+        target_frame = self.avg_frames[self.step_id+1]
+        observation = np.concatenate([time_step.observation, target_frame])
+        return time_step._replace(observation=observation, reward=0.)
+
+    def step(self, action) -> TimeStep:
+        time_step = self._env.step(action)
+
+        self.step_id += 1
+
+        obs = time_step.observation[-self.init_channel:]
+
+        if time_step.last():
+            target_frame = self.avg_frames[self.step_id]
+        else:
+            target_frame = self.avg_frames[self.step_id + 1]
+        observation = np.concatenate([time_step.observation, target_frame])
+
+        if self.dist_reward:
+            diff = (obs - target_frame) / 255.
+            reward = -np.linalg.norm(diff.flatten())
+        else:
+            reward = time_step.reward
+
+        return time_step._replace(observation=observation, reward=reward)
+
+    def observation_spec(self):
+        return specs.Array(shape=(self.init_channel * (self.frame_stack + 1), self.im_h, self.im_w), dtype=np.float32, name='observation')
 
     def action_spec(self):
         return self._env.action_spec()
