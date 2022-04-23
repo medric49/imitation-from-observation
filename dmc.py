@@ -13,6 +13,9 @@ import ct_model
 import drqv2
 import utils
 
+from numpy import dot
+from numpy.linalg import norm
+
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 from dm_control import manipulation, suite
@@ -232,18 +235,19 @@ class EncodeStackWrapper(dm_env.Environment):
         self.step_id += 1
 
         state = self.encode(time_step.observation)
-        s0 = state[-self.state_dim:]
+        if self.dist_reward:
+            s1 = state[-self.state_dim:]
+            s2 = self.avg_states[self.step_id]
+            # reward = -np.linalg.norm(s1 - s2)
+            reward = max(dot(s1, s2) / (norm(s1) * norm(s2)), 0)
+        else:
+            reward = time_step.reward
 
         if time_step.last():
             target_state = self.avg_states[self.step_id]
         else:
             target_state = self.avg_states[self.step_id + 1]
         observation = np.concatenate([state, target_state])
-
-        if self.dist_reward:
-            reward = -np.linalg.norm(s0 - target_state)
-        else:
-            reward = time_step.reward
 
         return time_step._replace(observation=observation, reward=reward)
 
@@ -255,6 +259,7 @@ class EncodeStackWrapper(dm_env.Environment):
 
     def __getattr__(self, name):
         return getattr(self._env, name)
+
 
 class CTStackWrapper(dm_env.Environment):
     def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, frame_stack, dist_reward):
@@ -356,19 +361,18 @@ class CTStackWrapper(dm_env.Environment):
 
         self.step_id += 1
 
-        obs = time_step.observation[-self.init_channel:]
+        if self.dist_reward:
+            s1 = self.context_translator.encode(time_step.observation[-self.init_channel:])
+            s2 = self.avg_states[self.step_id]
+            reward = max(dot(s1, s2) / (norm(s1) * norm(s2)), 0)
+        else:
+            reward = time_step.reward
 
         if time_step.last():
             target_frame = self.avg_frames[self.step_id]
         else:
             target_frame = self.avg_frames[self.step_id + 1]
         observation = np.concatenate([time_step.observation, target_frame])
-
-        if self.dist_reward:
-            diff = (obs - target_frame) / 255.
-            reward = -np.linalg.norm(diff.flatten())
-        else:
-            reward = time_step.reward
 
         return time_step._replace(observation=observation, reward=reward)
 
