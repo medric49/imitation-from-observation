@@ -362,7 +362,9 @@ class CTStackWrapper(dm_env.Environment):
         self.step_id += 1
 
         if self.dist_reward:
-            s1 = self.context_translator.encode(time_step.observation[-self.init_channel:])
+            with torch.no_grad():
+                obs = torch.tensor(time_step.observation[-self.init_channel:], dtype=torch.float, device=utils.device()).unsqueeze(0)
+                s1 = self.context_translator.encode(obs)[0].cpu().numpy()
             s2 = self.avg_states[self.step_id]
             reward = max(dot(s1, s2) / (norm(s1) * norm(s2)), 0)
         else:
