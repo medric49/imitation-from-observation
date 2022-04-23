@@ -8,7 +8,7 @@ im_h: 64
 
 # task settings
 expert_frame_stack: 3
-frame_stack: 1
+frame_stack: 3
 action_repeat: 2
 discount: 0.99
 # train settings
