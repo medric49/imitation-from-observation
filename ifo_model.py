@@ -1,7 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -280,7 +276,7 @@ class Agent(nn.Module):
 
         batch = next(replay_iter)
         obs, action, reward, discount, next_obs = utils.to_torch(
-            batch, self.device)
+            batch, utils.device())
 
         # augment
         obs = self.aug(obs.float())
