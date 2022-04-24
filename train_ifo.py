@@ -1,4 +1,7 @@
 import warnings
+
+import ifo_model
+
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import random
@@ -50,8 +53,8 @@ class Workspace:
         self.setup()
 
         self.cfg.agent.action_shape = self.train_env.action_spec().shape
-        self.cfg.agent.state_dim = self.train_env.observation_spec().shape[0]
-        self.rl_agent: rl_model.RLAgent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
+        self.cfg.agent.obs_shape = self.train_env.observation_spec().shape
+        self.rl_agent: ifo_model.Agent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -71,9 +74,9 @@ class Workspace:
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                   context_changers.ReacherHardContextChanger(),
                                   episode_len=self.cfg.episode_len)
-        self.train_env = dmc.EncodeStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
+        self.train_env = dmc.CTStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
                                                 self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                self.cfg.im_h, self.cfg.frame_stack,
                                                 dist_reward=True)
 
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
@@ -81,9 +84,9 @@ class Workspace:
                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                  context_changers.ReacherHardContextChanger(),
                                  episode_len=self.cfg.episode_len)
-        self.eval_env = dmc.EncodeStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
+        self.eval_env = dmc.CTStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
                                                 self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                self.cfg.im_h, self.cfg.frame_stack,
                                                 dist_reward=False)
 
         # create replay buffer
@@ -250,7 +253,7 @@ class Workspace:
             self.__dict__[k] = v
 
 
-@hydra.main(config_path='rl_cfgs', config_name='config')
+@hydra.main(config_path='ifo_cfgs', config_name='config')
 def main(cfg):
     root_dir = Path.cwd()
     workspace = Workspace(cfg)

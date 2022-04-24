@@ -41,7 +41,6 @@ class Workspace:
 
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
-        self.setup()
 
         self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
         self.expert.train(training=False)
@@ -50,7 +49,10 @@ class Workspace:
             utils.device())
         self.context_translator.eval()
 
+        self.setup()
+
         self.cfg.agent.action_shape = self.train_env.action_spec().shape
+        self.cfg.agent.state_dim = self.train_env.observation_spec().shape[0]
         self.agent: rl_model.ACAgent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
 
         self.timer = utils.Timer()
@@ -60,26 +62,35 @@ class Workspace:
     def setup(self):
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
+
         # create envs
+        self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
+                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                   episode_len=self.cfg.episode_len)
+
         self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                   context_changers.ReacherHardContextChanger(),
                                   episode_len=self.cfg.episode_len)
+        self.train_env = dmc.EncodeStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
+                                                self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                dist_reward=True)
+
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                  context_changers.ReacherHardContextChanger(),
                                  episode_len=self.cfg.episode_len)
-
-        self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
-                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
-                                   episode_len=self.cfg.episode_len)
+        self.eval_env = dmc.EncodeStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
+                                               self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                               self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                               dist_reward=False)
 
         # create replay buffer
-        self.cfg.agent.state_dim *= 2
         data_specs = (
-            specs.Array(shape=(self.cfg.agent.state_dim,), dtype=np.float32, name='observation'),
+            self.train_env.observation_spec(),
             self.train_env.action_spec(),
             specs.Array((1,), np.float32, 'reward'),
             specs.Array((1,), np.float32, 'discount')
@@ -97,69 +108,6 @@ class Workspace:
         self.video_recorder = VideoRecorder(
             self.work_dir if self.cfg.save_video else None)
 
-        self.context_changer = context_changers.ReacherHardContextChanger()
-
-
-    def _make_expert_video(self):
-        with torch.no_grad():
-            videos = []
-            for _ in range(self.cfg.n_video):
-                self.context_changer.reset()
-
-                cam_id = random.choice(self.cfg.context_camera_ids)
-                episode = []
-                time_step = self.expert_env.reset()
-
-                with utils.change_context(self.expert_env, self.context_changer):
-                    episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
-                while not time_step.last():
-                    action = self.expert.act(time_step.observation, 1, eval_mode=True)
-                    time_step = self.expert_env.step(action)
-                    with utils.change_context(self.expert_env, self.context_changer):
-                        episode.append(self.expert_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=cam_id))
-                videos.append(episode)
-            videos = np.array(videos, dtype=np.uint8)  # n_video x T x h x w x c
-            videos = videos.transpose((0, 1, 4, 2, 3))  # n_video x T x c x h x w
-        return videos
-
-    def predict_avg_states_frames(self, fobs):
-        expert_videos = self._make_expert_video()
-        with torch.no_grad():
-            states = []
-            frames = []
-
-            fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
-            expert_videos = torch.tensor(expert_videos, device=utils.device(), dtype=torch.float)
-            for expert_video in expert_videos:
-                state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=False)
-                states.append(state)
-                frames.append(frame)
-            states = torch.stack(states)  # n x T x z
-            frames = torch.stack(frames)  # n x T x c x h x w
-
-            avg_states = states.mean(dim=0)  # T x z
-            avg_frames = frames.mean(dim=0)  # T x c x h x w
-
-        avg_states = avg_states.cpu().numpy()
-        avg_frames = avg_frames.cpu().numpy()
-
-        return avg_states, avg_frames
-
-    def change_step_observation(self, time_step, target_state, target_frame):
-        with torch.no_grad():
-            obs = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
-            state = self.context_translator.encode(obs.unsqueeze(0))[0].cpu().numpy()
-        state = np.concatenate([state, target_state])
-        return time_step._replace(observation=state)
-
-    def change_step_reward(self, time_step, target_state, target_frame):
-        frame = time_step.observation
-        with torch.no_grad():
-            obs = torch.tensor(frame, device=utils.device(), dtype=torch.float)
-            state = self.context_translator.encode(obs.unsqueeze(0))[0].cpu().numpy()
-        reward = - np.linalg.norm(state - target_state)
-        return time_step._replace(reward=reward)
-
     def collect_steps(self, init_step):
         seed_until_step = utils.Until(self.cfg.batch_size)
 
@@ -169,11 +117,6 @@ class Workspace:
             episode_step = 0
 
             time_step = self.train_env.reset()
-            frame = time_step.observation
-            avg_states, avg_frames = self.predict_avg_states_frames(frame)
-            target_state, target_frame = avg_states[1], avg_frames[1]
-            time_step = self.change_step_observation(time_step, target_state, target_frame)
-
             self.replay_storage.add(time_step)
 
             while not time_step.last():
@@ -182,15 +125,6 @@ class Workspace:
                     action = self.agent.act(state, init_step, eval_mode=False)
 
                 time_step = self.train_env.step(action)
-                time_step = self.change_step_reward(time_step, target_state, target_frame)
-
-                episode_step += 1
-                self._global_step += 1
-                if episode_step + 1 < avg_states.shape[0]:
-                    target_state = avg_states[episode_step + 1]
-                    target_frame = avg_frames[episode_step + 1]
-
-                time_step = self.change_step_observation(time_step, target_state, target_frame)
                 self.replay_storage.add(time_step)
 
             nb_steps += episode_step
@@ -216,10 +150,6 @@ class Workspace:
         while eval_until_episode(episode):
             episode_step = 0
             time_step = self.eval_env.reset()
-            frame = time_step.observation
-            avg_states, avg_frames = self.predict_avg_states_frames(frame)
-            target_state, target_frame = avg_states[1], avg_frames[1]
-            time_step = self.change_step_observation(time_step, target_state, target_frame)
 
             self.video_recorder.init(self.eval_env)
             while not time_step.last():
@@ -229,12 +159,6 @@ class Workspace:
 
                 time_step = self.eval_env.step(action)
                 episode_step += 1
-
-                if episode_step + 1 < avg_states.shape[0]:
-                    target_state = avg_states[episode_step + 1]
-                    target_frame = avg_frames[episode_step + 1]
-
-                time_step = self.change_step_observation(time_step, target_state, target_frame)
 
                 self.video_recorder.record(self.eval_env)
                 total_reward += time_step.reward

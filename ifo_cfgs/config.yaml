@@ -14,11 +14,11 @@ discount: 0.99
 # train settings
 
 episode_len: 1000
-n_video : 1
+n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
-num_eval_episodes: 5
+num_eval_episodes: 20
 # snapshot
 save_snapshot: true
 # replay buffer
@@ -38,9 +38,8 @@ lr: 1e-4
 feature_dim: 50
 
 agent:
-  _target_: rl_model.RLAgent
-  state_dim: 1024
-  repr_dim: 512
+  _target_: ifo_model.Agent
+  obs_shape: ??? # to be specified later
   action_shape: ??? # to be specified later
   lr: ${lr}
   critic_target_tau: 0.01
@@ -52,12 +51,13 @@ agent:
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
 
+
 exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
 
 hydra:
   run:
-    dir: ./rl_exp_local/${exp_group}/${exp_id}
+    dir: ./ifo_exp_local/${exp_group}/${exp_id}
   sweep:
     dir: ./exp/${now:%Y.%m.%d}/${now:%H%M}_${agent_cfg.experiment}
     subdir: ${hydra.job.num}
