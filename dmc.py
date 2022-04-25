@@ -132,10 +132,10 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class EncodeStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, state_dim, frame_stack, dist_reward):
+    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward):
         self._env = env
 
-        self.context_changer = context_changers.ReacherHardContextChanger()
+        self.context_changer = context_changer
         self.expert: drqv2.DrQV2Agent = expert
         self.expert.train(False)
         self.context_translator: ct_model.CTNet = context_translator
@@ -190,7 +190,7 @@ class EncodeStackWrapper(dm_env.Environment):
             fobs = torch.tensor(fobs, device=utils.device(), dtype=torch.float)
             expert_videos = torch.tensor(self.expert_videos, device=utils.device(), dtype=torch.float)
             for expert_video in expert_videos:
-                state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=False)
+                state, frame = self.context_translator.translate(expert_video, fobs, keep_enc2=True)
                 states.append(state)
                 frames.append(frame)
             states = torch.stack(states)  # n x T x z
@@ -238,8 +238,8 @@ class EncodeStackWrapper(dm_env.Environment):
         if self.dist_reward:
             s1 = state[-self.state_dim:]
             s2 = self.avg_states[self.step_id]
-            # reward = -np.linalg.norm(s1 - s2)
-            reward = dot(s1, s2) / (norm(s1) * norm(s2))
+            reward = -np.linalg.norm(s1 - s2)
+            # reward = dot(s1, s2) / (norm(s1) * norm(s2))
         else:
             reward = time_step.reward
 
@@ -262,10 +262,10 @@ class EncodeStackWrapper(dm_env.Environment):
 
 
 class CTStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, frame_stack, dist_reward):
+    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, frame_stack, context_changer, dist_reward):
         self._env = env
 
-        self.context_changer = context_changers.ReacherHardContextChanger()
+        self.context_changer = context_changer
         self.expert: drqv2.DrQV2Agent = expert
         self.expert.train(False)
         self.context_translator: ct_model.CTNet = context_translator
