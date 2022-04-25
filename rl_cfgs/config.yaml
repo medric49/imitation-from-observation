@@ -18,7 +18,7 @@ n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
-num_eval_episodes: 20
+num_eval_episodes: 5
 # snapshot
 save_snapshot: true
 # replay buffer
