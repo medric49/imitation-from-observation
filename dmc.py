@@ -366,7 +366,8 @@ class CTStackWrapper(dm_env.Environment):
                 obs = torch.tensor(time_step.observation[-self.init_channel:], dtype=torch.float, device=utils.device()).unsqueeze(0)
                 s1 = self.context_translator.encode(obs)[0].cpu().numpy()
             s2 = self.avg_states[self.step_id]
-            reward = dot(s1, s2) / (norm(s1) * norm(s2))
+            reward = -np.linalg.norm(s1 - s2)
+            # reward = dot(s1, s2) / (norm(s1) * norm(s2))
         else:
             reward = time_step.reward
 
