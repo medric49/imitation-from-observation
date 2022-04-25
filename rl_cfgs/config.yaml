@@ -14,7 +14,7 @@ discount: 0.99
 # train settings
 
 episode_len: 1000
-n_video : 1
+n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
