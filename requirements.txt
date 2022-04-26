@@ -1,4 +1,4 @@
-numpy==1.18.1
+numpy
 torch
 torchvision
 torchaudio
@@ -24,3 +24,5 @@ termcolor
 pyyaml
 rospkg
 modern_robotics
+ray
+ray[tune]
