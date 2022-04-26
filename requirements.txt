@@ -6,7 +6,7 @@ notebook
 jupyter
 tb-nightly
 pyparsing==2.4.7
-hydra-core
+hydra
 scikit-image
 matplotlib==3.4.2
 dm-env
@@ -24,5 +24,3 @@ termcolor
 pyyaml
 rospkg
 modern_robotics
-ray
-ray[tune]
