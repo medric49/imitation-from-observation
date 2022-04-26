@@ -71,7 +71,7 @@ class Workspace:
         self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                   self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
-                                  context_changers.ReacherHardContextChanger(),
+                                  hydra.utils.instantiate(self.cfg.context_changer),
                                   episode_len=self.cfg.episode_len)
         self.train_env = dmc.EncodeStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
                                                 self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
