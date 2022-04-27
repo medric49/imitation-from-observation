@@ -16,5 +16,5 @@ if __name__ == '__main__':
 
     utils.generate_video_from_expert(
         'videos/reacher_hard_v5', expert, env, context_changer, cam_ids=[0],
-        num_frames=30, num_train=60000, num_valid=15000)
+        num_frames=30, num_train=3000, num_valid=600)
 

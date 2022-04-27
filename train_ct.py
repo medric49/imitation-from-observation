@@ -30,8 +30,8 @@ def _make_agent(obs_spec, action_spec, cfg):
 
 
 class Workspace:
-    def __init__(self, cfg):
-        self.work_dir = Path.cwd()
+    def __init__(self, cfg, hyperparams_str=''):
+        self.work_dir = Path.cwd() / hyperparams_str
         print(f'workspace: {self.work_dir}')
 
         self.cfg = cfg

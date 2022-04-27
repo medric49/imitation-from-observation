@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import gc
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -130,6 +131,10 @@ class CTNet(nn.Module):
     @staticmethod
     def load(file):
         snapshot = Path(file)
+        
+        torch.cuda.empty_cache()
+        gc.collect()
+        # print(torch.cuda.memory_summary(abbreviated=False))
         with snapshot.open('rb') as f:
             payload = torch.load(f)
         return payload['context_translator']
@@ -205,6 +210,10 @@ class DecoderNet(nn.Module):
         self.t_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
 
     def forward(self, z, c1, c2, c3, c4):
+        # print(torch.cuda.memory_summary(device=None, abbreviated=False))
+        torch.cuda.empty_cache()
+        gc.collect()
+
         z = z.view(z.shape[0], z.shape[1], 1, 1)
         d4 = self.leaky_relu(self.b_norm_fc(self.fc(z)))
         d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
