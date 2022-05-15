@@ -18,14 +18,14 @@ use_tb: true
 ct_model:
   _target_: ct_model.CTNet
   lr: 10e-4
-  lambda_trans: 1.  # trans loss
-  lambda_rec: 1.  # rec loss
-  lambda_align: 1.  # align loss
+  lambda_trans: 1.
+  lambda_rec: 1.
+  lambda_align: 1.
   hidden_dim: 1024
   use_tb: ${use_tb}
 
 translator_model:
-  _target_: ct_model.LSTMTranslatorNet
+  _target_: ct_model.TranslatorNet
   hidden_dim: ${ct_model.hidden_dim}
 
 

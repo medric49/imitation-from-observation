@@ -1,20 +1,17 @@
+import os
 import random
 from collections import deque
 from typing import Any, NamedTuple
 
 import dm_env
 import numpy as np
-import os
-
 import torch
+from numpy.linalg import norm
 
 import context_changers
 import ct_model
 import drqv2
 import utils
-
-from numpy import dot
-from numpy.linalg import norm
 
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
@@ -132,7 +129,7 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class EncodeStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward):
+    def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False):
         self._env = env
 
         self.context_changer = context_changer
@@ -151,6 +148,7 @@ class EncodeStackWrapper(dm_env.Environment):
         self.im_h = im_h
         self.state_dim = state_dim
         self.dist_reward = dist_reward
+        self.use_target_state = use_target_state
 
         self.avg_states = None
         self.avg_frames = None
@@ -225,7 +223,8 @@ class EncodeStackWrapper(dm_env.Environment):
 
         state = self.encode(time_step.observation)
         target_state = self.avg_states[self.step_id + 1]
-        state = np.concatenate([state, target_state])
+        if self.use_target_state:
+            state = np.concatenate([state, target_state])
 
         return time_step._replace(observation=state, reward=0.)
 
@@ -239,7 +238,6 @@ class EncodeStackWrapper(dm_env.Environment):
             s1 = state[-self.state_dim:]
             s2 = self.avg_states[self.step_id]
             reward = -np.linalg.norm(s1 - s2)
-            # reward = dot(s1, s2) / (norm(s1) * norm(s2))
         else:
             reward = time_step.reward
 
@@ -247,12 +245,17 @@ class EncodeStackWrapper(dm_env.Environment):
             target_state = self.avg_states[self.step_id]
         else:
             target_state = self.avg_states[self.step_id + 1]
-        observation = np.concatenate([state, target_state])
 
-        return time_step._replace(observation=observation, reward=reward)
+        if self.use_target_state:
+            state = np.concatenate([state, target_state])
+
+        return time_step._replace(observation=state, reward=reward)
 
     def observation_spec(self):
-        return specs.Array(shape=(self.state_dim * (self.frame_stack + 1),), dtype=np.float32, name='observation')
+        state_dim = self.state_dim * self.frame_stack
+        if self.use_target_state:
+            state_dim += self.frame_stack
+        return specs.Array(shape=state_dim, dtype=np.float32, name='observation')
 
     def action_spec(self):
         return self._env.action_spec()
@@ -449,7 +452,7 @@ class ExtendedTimeStepWrapper(dm_env.Environment):
 
 
 class ChangeContextWrapper(dm_env.Environment):
-    def __init__(self, env, context_changer, camera_id, im_h, im_w, pixels_key):
+    def __init__(self, env, context_changer: context_changers.ContextChanger, camera_id, im_h, im_w, pixels_key):
         self._context_changer = context_changer
         self._env = env
         self._camera_id = camera_id
@@ -513,7 +516,7 @@ class EpisodeLenWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer=None, episode_len=None):
+def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer: context_changers.ContextChanger = None, episode_len=None):
     domain, task = name.split('_', 1)
     # overwrite cup to ball_in_cup
     domain = dict(cup='ball_in_cup').get(domain, domain)
