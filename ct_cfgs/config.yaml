@@ -7,7 +7,7 @@ seed: 1
 num_epochs: 18001
 eval_every_epochs: 20
 num_evaluations: 5
-batch_size: 8
+batch_size: 32
 episode_len: 30
 num_workers: 4
 

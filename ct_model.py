@@ -34,7 +34,7 @@ class CTNet(nn.Module):
         video1 = video1.unsqueeze(dim=1)
         fobs2 = fobs2.unsqueeze(dim=0)
 
-        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = [self.enc1(video1[t]) for t in range(T)]
         z1_seq = torch.stack(z1_seq)
 
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
@@ -71,11 +71,11 @@ class CTNet(nn.Module):
 
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
-        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = [self.enc1(video1[t]) for t in range(T)]
         z1_seq = torch.stack(z1_seq)
         z3_seq = self.t(z1_seq, fz2)
 
-        z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
+        z2_seq = [self.enc1(video2[t]) for t in range(T)]
         z2_seq = torch.stack(z2_seq)
 
         # prev_obs_z3 = self.dec(z3_seq[0], c1, c2, c3, c4)
