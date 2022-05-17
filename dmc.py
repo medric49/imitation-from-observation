@@ -502,7 +502,7 @@ class EpisodeLenWrapper(dm_env.Environment):
     def step(self, action) -> TimeStep:
         self._counter += 1
         time_step = self._env.step(action)
-        if self._counter == self._ep_len:
+        if self._counter >= self._ep_len:
             time_step = time_step._replace(step_type=StepType.LAST)
         return time_step
 

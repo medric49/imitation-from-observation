@@ -69,6 +69,9 @@ class CTNet(nn.Module):
         l_rec = 0
         l_align = 0
 
+        l_sim = 0
+        delay = 3
+
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
         z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
@@ -81,7 +84,7 @@ class CTNet(nn.Module):
         # prev_obs_z3 = self.dec(z3_seq[0], c1, c2, c3, c4)
         # prev_obs_z2 = self.dec(z2_seq[0], c1, c2, c3, c4)
         # prev_obs2 = video2[0]
-        for t in range(1, T):
+        for t in range(T):
             obs2 = video2[t]
             obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
             obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
@@ -90,13 +93,19 @@ class CTNet(nn.Module):
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))  # + F.mse_loss(torch.flatten(obs_z2 - prev_obs_z2, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
+            if t >= delay:
+                l_sim += F.cosine_similarity(z3_seq[t - delay], z3_seq[t])
+
+
             # prev_obs_z3 = obs_z3
             # prev_obs_z2 = obs_z2
             # prev_obs2 = obs2
 
-        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align
+        l_sim /= (T - delay)
 
-        return loss, l_trans, l_rec, l_align
+        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * 0.1
+
+        return loss, l_trans, l_rec, l_align, l_sim
 
     def update(self, video1, video2):
         metrics = dict()
@@ -106,7 +115,7 @@ class CTNet(nn.Module):
         self._t_opt.zero_grad()
         self._dec_opt.zero_grad()
 
-        loss, l_trans, l_rec, l_align = self.evaluate(video1, video2)
+        loss, l_trans, l_rec, l_align, l_sim = self.evaluate(video1, video2)
         
         loss.backward()
         
