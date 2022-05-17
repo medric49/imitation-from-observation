@@ -255,7 +255,7 @@ class EncodeStackWrapper(dm_env.Environment):
         state_dim = self.state_dim * self.frame_stack
         if self.use_target_state:
             state_dim += self.frame_stack
-        return specs.Array(shape=state_dim, dtype=np.float32, name='observation')
+        return specs.Array(shape=(state_dim,), dtype=np.float32, name='observation')
 
     def action_spec(self):
         return self._env.action_spec()
