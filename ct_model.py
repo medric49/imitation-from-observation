@@ -94,7 +94,7 @@ class CTNet(nn.Module):
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
             if t >= delay:
-                l_sim += F.cosine_similarity(z3_seq[t - delay], z3_seq[t])
+                l_sim += F.cosine_similarity(z3_seq[t - delay], z3_seq[t]).mean()
 
 
             # prev_obs_z3 = obs_z3
