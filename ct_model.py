@@ -129,6 +129,7 @@ class CTNet(nn.Module):
             metrics['trans_loss'] = l_trans.item()
             metrics['rec_loss'] = l_rec.item()
             metrics['align_loss'] = l_align.item()
+            metrics['sim_loss'] = l_sim.item()
 
         return metrics
 
