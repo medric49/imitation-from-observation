@@ -91,7 +91,7 @@ class Workspace:
                         video1, video2 = next(self.valid_dataloader_iter)
                         video1 = video1.to(device=utils.device())
                         video2 = video2.to(device=utils.device())
-                        loss, trans_loss, rec_loss, align_loss = self.context_translator.evaluate(video1, video2)
+                        loss, trans_loss, rec_loss, align_loss, sim_loss = self.context_translator.evaluate(video1, video2)
 
                         eval_loss += loss
                         eval_trans_loss += trans_loss
