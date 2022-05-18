@@ -1,6 +1,9 @@
+import random
 from pathlib import Path
 
 import gc
+
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -93,15 +96,14 @@ class CTNet(nn.Module):
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))  # + F.mse_loss(torch.flatten(obs_z2 - prev_obs_z2, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
             l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
-            if t >= delay:
-                l_sim += F.cosine_similarity(z3_seq[t - delay], z3_seq[t]).abs().mean()
-
+            t_2 = random.choice(list(np.arange(0, t-delay)) + list(np.arange(t+delay, T)))
+            l_sim += F.cosine_similarity(z3_seq[t], z3_seq[t_2]).abs().mean()
 
             # prev_obs_z3 = obs_z3
             # prev_obs_z2 = obs_z2
             # prev_obs2 = obs2
 
-        l_sim /= (T - delay)
+        l_sim /= T
 
         loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * 0.1
 
