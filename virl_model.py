@@ -3,7 +3,7 @@ from torch import nn
 from torch.nn import functional as F
 
 
-class ViRLModel(nn.Module):
+class ViRLNet(nn.Module):
 
     def __init__(self, hidden_dim, rho, lr, lambda_1, lambda_2, lambda_3, lambda_4):
         super().__init__()
@@ -26,15 +26,38 @@ class ViRLModel(nn.Module):
         self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
     def encode(self, video):
-        T = video.shape[1]
-        video = video.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
-        video = torch.transpose(video, dim0=0, dim1=1)  # T x n x c x h x w
+        video = video.unsqueeze(0)  # 1 x T x c x h x w
+        video = video.to(dtype=torch.float) / 255. - 0.5  # 1 x T x c x h x w
+        video = torch.transpose(video, dim0=0, dim1=1)  # T x 1 x c x h x w
+        e_seq, _, _, _, _ = self._encode(video)
+        h, _ = self.lstm_enc(e_seq)  # 1 x h
+        h = h[0]
+        return h
+
+    def encode_decode(self, video):
+        video = video.unsqueeze(0)  # 1 x T x c x h x w
+        video = video.to(dtype=torch.float) / 255. - 0.5  # 1 x T x c x h x w
+        video = torch.transpose(video, dim0=0, dim1=1)  # T x 1 x c x h x w
 
         e_seq, c1_seq, c2_seq, c3_seq, c4_seq = self._encode(video)
 
         h, hidden = self.lstm_enc(e_seq)
 
-        return h
+        e0_seq = self.lstm_dec(e_seq, hidden)
+
+        video0 = self._decode(e0_seq, c1_seq, c2_seq, c3_seq, c4_seq).squeeze(1)
+        video1 = self._decode(e_seq, c1_seq, c2_seq, c3_seq, c4_seq).squeeze(1)
+
+        video0 = self._unnormalize(video0)
+        video1 = self._unnormalize(video1)
+
+        return video0, video1
+
+    def _unnormalize(self, video):
+        video = (video + 0.5) * 255.
+        video[video > 255.] = 255.
+        video[video < 0.] = 0.
+        return video
 
     def _encode(self, video):
         e_seq = []
@@ -99,7 +122,16 @@ class ViRLModel(nn.Module):
         l_raes = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
         l_vaei = self.loss_vae(video_i, video1_i) + self.loss_vae(video_p, video1_p)
         loss = self.lambda_1 * l_sns + self.lambda_2 * l_sni + self.lambda_3 * l_raes + self.lambda_4 * l_vaei
-        return loss, l_sns, l_sni, l_raes, l_vaei
+
+        metrics = {
+            'loss': loss.item(),
+            'l_sns': l_sns.item(),
+            'l_sni': l_sni.item(),
+            'l_raes': l_raes.item(),
+            'l_vaei': l_vaei.item()
+        }
+
+        return metrics, loss
 
     def update(self, video_i, video_p, video_n):
 
@@ -108,7 +140,7 @@ class ViRLModel(nn.Module):
         self.lstm_dec_opt.zero_grad()
         self.deconv_opt.zero_grad()
 
-        loss, l_sns, l_sni, l_raes, l_vaei = self.evaluate(video_i, video_p, video_n)
+        metrics, loss = self.evaluate(video_i, video_p, video_n)
 
         loss.backward()
 
@@ -116,14 +148,6 @@ class ViRLModel(nn.Module):
         self.lstm_dec_opt.step()
         self.lstm_enc_opt.step()
         self.conv_opt.step()
-
-        metrics = {
-            'loss': loss,
-            'l_sns': l_sns,
-            'l_sni': l_sni,
-            'l_raes': l_raes,
-            'l_vaei': l_vaei
-        }
 
         return metrics
 
@@ -173,7 +197,7 @@ class ConvNet(nn.Module):
         c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
         c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.sigmoid(self.fc2(e))
+        e = self.leaky_relu(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
         return e, c1, c2, c3, c4
 
