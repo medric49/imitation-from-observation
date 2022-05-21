@@ -38,10 +38,11 @@ class CTVideoDataset(torch.utils.data.IterableDataset):
 
 class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
-    def __init__(self, root, episode_len, cam_ids):
+    def __init__(self, root, episode_len, cam_ids, augmentation=True):
         self._root = Path(root)
         self._num_classes = len(list(self._root.iterdir()))
         self._files = []
+        self._augmentation = augmentation
 
         for c in range(self._num_classes):
             class_dir = self._root / str(c)
@@ -69,11 +70,53 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         video_p = np.load(video_p)[cam2, :self._episode_len]
         video_n = np.load(video_n)[cam3, :self._episode_len]
 
+        if self._augmentation:
+            video_i, video_p, video_n = self.add_noise(video_i, video_p, video_n)
+            video_i, video_p, video_n = self.random_shuffle(video_i, video_p, video_n)
+            video_i, video_p, video_n = self.random_sequence_cropping(video_i, video_p, video_n)
+
         video_i = video_i.transpose(0, 3, 1, 2).copy()
         video_p = video_p.transpose(0, 3, 1, 2).copy()
         video_n = video_n.transpose(0, 3, 1, 2).copy()
 
         return video_i, video_p, video_n
+
+    def add_noise(self, video_i, video_p, video_n, mean=128., std=0.02):
+        video_1 = video_i + np.random.normal(mean, std, video_i.shape)
+        video_2 = video_p + np.random.normal(mean, std, video_p.shape)
+        video_3 = video_n + np.random.normal(mean, std, video_n.shape)
+
+        video_1 = np.clip(video_1, 0., 255.)
+        video_2 = np.clip(video_2, 0., 255.)
+        video_3 = np.clip(video_3, 0., 255.)
+
+        return video_1, video_2, video_3
+
+    def random_shuffle(self, video_i, video_p, video_n, p=0.5):
+        shuffle = np.random.rand() > p
+        if shuffle:
+            video_n = video_i.copy()
+            np.random.shuffle(video_n)
+        return video_i, video_p, video_n
+
+    def random_sequence_cropping(self, video_i, video_p, video_n):
+        T = video_i.shape[0]
+        base = sum(list(range(T)))
+        p_list = [(T - i)/base for i in range(T)]
+
+        video_1, video_2, video_3 = [], [], []
+        for i in range(T):
+            keep = np.random.rand() > p_list[i]
+
+            if keep:
+                video_1.append(video_i[i])
+                video_2.append(video_p[i])
+                video_3.append(video_n[i])
+
+        video_1 = np.stack(video_1)
+        video_2 = np.stack(video_2)
+        video_3 = np.stack(video_3)
+        return video_1, video_2, video_3
 
     def __iter__(self) -> Iterator[T_co]:
         while True:
