@@ -11,6 +11,7 @@ mujoco_env
 rllab
 sandbox
 gym
+virl_exp_local
 
 venv
 *.sh
