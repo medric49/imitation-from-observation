@@ -75,6 +75,8 @@ class Workspace:
             video_p = video_p.to(device=utils.device())
             video_n = video_n.to(device=utils.device())
 
+            video_i, video_p, video_n = datasets.ViRLVideoDataset.augment(video_i, video_p, video_n)
+
             metrics = self.encoder.update(video_i, video_p, video_n)
 
             self.logger.log_metrics(metrics, self._epoch, 'train')
