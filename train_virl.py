@@ -71,9 +71,9 @@ class Workspace:
         while train_until_epoch(self._epoch):
             video_i, video_p, video_n = next(self.dataloader_iter)
 
-            video_i = video_i.to(device=utils.device())
-            video_p = video_p.to(device=utils.device())
-            video_n = video_n.to(device=utils.device())
+            video_i = video_i.to(device=utils.device(), dtype=torch.float)
+            video_p = video_p.to(device=utils.device(), dtype=torch.float)
+            video_n = video_n.to(device=utils.device(), dtype=torch.float)
 
             video_i, video_p, video_n = datasets.ViRLVideoDataset.augment(video_i, video_p, video_n)
 
