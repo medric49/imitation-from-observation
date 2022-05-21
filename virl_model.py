@@ -35,6 +35,7 @@ class ViRLNet(nn.Module):
         return h
 
     def encode_decode(self, video):
+        T = video.shape[0]
         video = video.unsqueeze(0)  # 1 x T x c x h x w
         video = video.to(dtype=torch.float) / 255. - 0.5  # 1 x T x c x h x w
         video = torch.transpose(video, dim0=0, dim1=1)  # T x 1 x c x h x w
@@ -43,7 +44,7 @@ class ViRLNet(nn.Module):
 
         h, hidden = self.lstm_enc(e_seq)
 
-        e0_seq = self.lstm_dec(e_seq, hidden)
+        e0_seq = self.lstm_dec(h, hidden, T)
 
         video0 = self._decode(e0_seq, c1_seq, c2_seq, c3_seq, c4_seq).squeeze(1)
         video1 = self._decode(e_seq, c1_seq, c2_seq, c3_seq, c4_seq).squeeze(1)
@@ -250,8 +251,8 @@ class LSTMEncoder(nn.Module):
         self.encoder = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
 
     def forward(self, e_seq):
-        h0 = torch.zeros(e_seq.shape[1:]).repeat(self.num_layers, 1, 1)
-        c0 = torch.zeros(e_seq.shape[1:]).repeat(self.num_layers, 1, 1)
+        h0 = torch.zeros(e_seq.shape[1:]).repeat(self.num_layers, 1, 1).to(device=e_seq.device)
+        c0 = torch.zeros(e_seq.shape[1:]).repeat(self.num_layers, 1, 1).to(device=e_seq.device)
 
         h_seq, hidden = self.encoder(e_seq, (h0, c0))
         h = h_seq[-1]
@@ -269,7 +270,7 @@ class LSTMDecoder(nn.Module):
         e_seq = []
         for _ in range(T):
             h, hidden = self.decoder(h, hidden)
-            e_seq.append(h)
+            e_seq.append(h[0])
 
         e_seq = torch.stack(e_seq)
         return e_seq

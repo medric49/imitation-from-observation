@@ -32,4 +32,4 @@ exp_id: ${now:%H%M%S}
 
 hydra:
   run:
-    dir: ./ct_exp_local/${exp_group}/${exp_id}
+    dir: ./virl_exp_local/${exp_group}/${exp_id}

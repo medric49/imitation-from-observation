@@ -40,8 +40,8 @@ class Workspace:
         utils.set_seed_everywhere(cfg.seed)
         self.encoder: virl_model.ViRLNet = hydra.utils.instantiate(self.cfg.virl_model).to(utils.device())
 
-        self.dataset = datasets.VideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
-        self.valid_dataset = datasets.VideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
+        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams)
+        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -106,7 +106,7 @@ class Workspace:
                                 metrics[k] += v
 
                     for k, v in metrics.items():
-                        metrics[v] /= self.cfg.num_evaluations
+                        metrics[k] /= self.cfg.num_evaluations
 
                     self.logger.log_metrics(metrics, self._epoch, 'eval')
 
@@ -120,6 +120,7 @@ class Workspace:
 
                     video_sample, _, _ = next(self.valid_dataloader_iter)
                     video_sample = video_sample[0]  # T x c x h x w
+                    video_sample = video_sample.to(device=utils.device())
                     video0, video1 = self.encoder.encode_decode(video_sample)
 
                     video.make_video_from_frames(self.work_dir / f'eval_video/{self._epoch}.mp4',

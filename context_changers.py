@@ -83,6 +83,18 @@ class ReacherHardContextChanger(ContextChanger):
         env.physics.named.model.geom_rgba['c5'] = [0, 0, 0, 0]
 
 
+class ReacherHardTargetSwitcherContextChanger(ReacherHardContextChanger):
+    def change_env(self, env):
+        super(ReacherHardTargetSwitcherContextChanger, self).change_env(env)
+        env.physics.named.model.geom_size['target'] = 0.
+        env.physics.named.model.geom_size['target_1'] = .015
+
+    def reset_env(self, env):
+        super(ReacherHardTargetSwitcherContextChanger, self).reset_env(env)
+        env.physics.named.model.geom_size['target'] = .015
+        env.physics.named.model.geom_size['target_1'] = 0.
+
+
 class WalkerRunContextChanger(ContextChanger):
 
     def reset(self):
