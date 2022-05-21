@@ -41,7 +41,7 @@ class Workspace:
         self.encoder: virl_model.ViRLNet = hydra.utils.instantiate(self.cfg.virl_model).to(utils.device())
 
         self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams)
-        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, augmentation=False)
+        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
