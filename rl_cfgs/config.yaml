@@ -8,12 +8,12 @@ im_h: 64
 
 # task settings
 expert_frame_stack: 3
-frame_stack: 3
+frame_stack: 1
 action_repeat: 2
 discount: 0.99
 # train settings
 
-episode_len: 1000
+episode_len: 100 #1000
 n_video : 10
 num_seed_frames: 4000
 # eval
@@ -35,11 +35,13 @@ use_tb: true
 experiment: exp
 # agent
 lr: 1e-4
-feature_dim: 50
+state_dim: 128  # 1024
+
+use_ct: False
 
 agent:
   _target_: rl_model.RLAgent
-  state_dim: 1024
+  state_dim: ${state_dim}
   repr_dim: 512
   action_shape: ??? # to be specified later
   lr: ${lr}
@@ -48,7 +50,7 @@ agent:
   use_tb: ${use_tb}
   num_expl_steps: 2000
   hidden_dim: 1024
-  feature_dim: ${feature_dim}
+  feature_dim: 50
   stddev_schedule: ${stddev_schedule}
   stddev_clip: 0.3
 

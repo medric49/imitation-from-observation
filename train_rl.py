@@ -1,5 +1,7 @@
 import warnings
 
+import virl_model
+
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import random
@@ -45,9 +47,6 @@ class Workspace:
 
         self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
         self.expert.train(training=False)
-        self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(
-            utils.device())
-        self.context_translator.eval()
 
         self.setup()
 
@@ -73,22 +72,44 @@ class Workspace:
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                   hydra.utils.instantiate(self.cfg.context_changer),
                                   episode_len=self.cfg.episode_len)
-        self.train_env = dmc.EncodeStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
-                                                self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                hydra.utils.instantiate(self.cfg.context_changer),
-                                                dist_reward=True)
 
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                  hydra.utils.instantiate(self.cfg.context_changer),
                                  episode_len=self.cfg.episode_len)
-        self.eval_env = dmc.EncodeStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
-                                               self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                               self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                               hydra.utils.instantiate(self.cfg.context_changer),
-                                               dist_reward=False)
+
+        if self.cfg.use_ct:
+            self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(
+                utils.device())
+            self.context_translator.eval()
+            self.train_env = dmc.CTEncoderStackWrapper(self.train_env, self.expert, self.context_translator,
+                                                       self.expert_env,
+                                                       self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                                       self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                       hydra.utils.instantiate(self.cfg.context_changer),
+                                                       dist_reward=True)
+            self.eval_env = dmc.CTEncoderStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
+                                                      self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                                      self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                      hydra.utils.instantiate(self.cfg.context_changer),
+                                                      dist_reward=False)
+        else:
+            self.encoder: virl_model.ViRLNet = virl_model.ViRLNet.load(to_absolute_path(self.cfg.virl_file)).to(
+                utils.device())
+            self.encoder.eval()
+            self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
+                                                       self.expert_env,
+                                                       self.cfg.context_camera_ids, self.cfg.im_w,
+                                                       self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                       hydra.utils.instantiate(self.cfg.context_changer),
+                                                       dist_reward=True)
+            self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
+                                                      self.expert_env,
+                                                      self.cfg.context_camera_ids, self.cfg.im_w,
+                                                      self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                      hydra.utils.instantiate(self.cfg.context_changer),
+                                                      dist_reward=False)
 
         # create replay buffer
         data_specs = (
