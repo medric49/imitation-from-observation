@@ -198,7 +198,7 @@ class ConvNet(nn.Module):
         c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
         c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.leaky_relu(self.fc2(e))
+        e = self.sigmoid(self.fc2(e))  # self.leaky_relu(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
         return e, c1, c2, c3, c4
 
