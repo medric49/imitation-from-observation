@@ -13,8 +13,8 @@ import ct_model
 import drqv2
 import utils
 
-os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
-os.environ['MUJOCO_GL'] = 'egl'
+# os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
+# os.environ['MUJOCO_GL'] = 'egl'
 from dm_control import manipulation, suite
 from dm_control.suite.wrappers import action_scale, pixels
 from dm_env import StepType, specs

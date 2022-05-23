@@ -113,8 +113,8 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
     @staticmethod
     def augment(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
-        video_i, video_p, video_n = ViRLVideoDataset.augment_images(video_i, video_p, video_n)
-        video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
+        # video_i, video_p, video_n = ViRLVideoDataset.augment_images(video_i, video_p, video_n)
+        # video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
         video_i, video_p, video_n = ViRLVideoDataset.random_shuffle(video_i, video_p, video_n)
         video_i, video_p, video_n = ViRLVideoDataset.random_sequence_cropping(video_i, video_p, video_n)
         return video_i, video_p, video_n
@@ -138,8 +138,8 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def add_noise(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor, mean=128., std=0.02):
         video_1 = video_i + torch.normal(mean, std, video_i.shape, device=video_i.device)
-        video_2 = video_p + torch.normal(mean, std, video_p.shape, device=video_i.device)
-        video_3 = video_n + torch.normal(mean, std, video_n.shape, device=video_i.device)
+        video_2 = video_p + torch.normal(mean, std, video_p.shape, device=video_p.device)
+        video_3 = video_n + torch.normal(mean, std, video_n.shape, device=video_n.device)
 
         video_1 = torch.clip(video_1, 0., 255.)
         video_2 = torch.clip(video_2, 0., 255.)
