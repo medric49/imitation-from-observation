@@ -21,6 +21,8 @@ from dm_env import StepType, specs
 from dm_env._environment import TimeStep
 from hydra.utils import to_absolute_path
 
+import virl_model
+
 
 class ExtendedTimeStep(NamedTuple):
     step_type: Any
@@ -128,7 +130,127 @@ class FrameStackWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-class EncodeStackWrapper(dm_env.Environment):
+class ViRLEncoderStackWrapper(dm_env.Environment):
+    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False):
+
+        self._env = env
+
+        self.context_changer = context_changer
+        self.expert: drqv2.DrQV2Agent = expert
+        self.expert.train(False)
+        self.encoder: virl_model.ViRLNet = encoder
+        self.encoder.eval()
+        self.frame_stack = frame_stack
+
+        self.expert_env = expert_env
+
+        self.context_camera_ids = context_camera_ids
+
+        self.im_w = im_w
+        self.im_h = im_h
+        self.state_dim = state_dim
+        self.dist_reward = dist_reward
+        self.use_target_state = use_target_state
+
+        self.expert_states = None
+        self.agent_states = None
+
+        self.init_channel = self._env.observation_spec().shape[0] // self.frame_stack
+
+        self.step_id = None
+
+    def make_expert_states(self):
+        with torch.no_grad():
+            self.context_changer.reset()
+            cam_id = random.choice(self.context_camera_ids)
+
+            time_step = self.expert_env.reset()
+            episode = []
+            with utils.change_context(self.expert_env, self.context_changer):
+                episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+            while not time_step.last():
+                action = self.expert.act(time_step.observation, 1, eval_mode=True)
+                time_step = self.expert_env.step(action)
+                with utils.change_context(self.expert_env, self.context_changer):
+                    episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+
+            episode = np.array(episode)
+            episode = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
+            e_seq = self.encoder.encode_frame(episode).cpu().numpy()
+        return e_seq
+
+    def encode(self, observation):
+        frames = []
+        for i in range(self.frame_stack):
+            index = i * self.init_channel
+            frames.append(observation[index: index + self.init_channel, :, :])
+        frames = np.array(frames)
+        frames = torch.tensor(frames, device=utils.device(), dtype=torch.float)
+        with torch.no_grad():
+            states = self.encoder.encode_frame(frames)
+            state = states.view((-1,)).cpu().numpy()
+        return state
+
+    def reset(self) -> TimeStep:
+        self.expert_states = self.make_expert_states()
+        self.agent_states = []
+
+        time_step = self._env.reset()
+        self.step_id = 0
+
+        state = self.encode(time_step.observation)
+        self.agent_states.append(state[-self.state_dim:])
+
+        if self.use_target_state:
+            target_state = self.expert_states[self.step_id + 1]
+            state = np.concatenate([state, target_state])
+        return time_step._replace(observation=state, reward=0.)
+
+    def step(self, action) -> TimeStep:
+        time_step = self._env.step(action)
+        self.step_id += 1
+
+        state = self.encode(time_step.observation)
+        self.agent_states.append(state[-self.state_dim:])
+
+        if self.dist_reward:
+            with torch.no_grad():
+                expert_e_seq = torch.tensor(self.expert_states[:self.step_id], dtype=torch.float, device=utils.device())
+                agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+
+                enc_11 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
+                enc_12 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
+                enc_21 = expert_e_seq[-1].cpu().numpy()
+                enc_22 = agent_e_seq[-1].cpu().numpy()
+            reward_1 = -np.linalg.norm(enc_11 - enc_12)
+            reward_2 = -np.linalg.norm(enc_21 - enc_22)
+            reward = reward_1 + reward_2
+        else:
+            reward = time_step.reward
+
+        if self.use_target_state:
+            if time_step.last():
+                target_state = self.expert_states[self.step_id]
+            else:
+                target_state = self.expert_states[self.step_id + 1]
+            state = np.concatenate([state, target_state])
+
+        return time_step._replace(observation=state, reward=reward)
+
+    def observation_spec(self):
+        state_dim = self.state_dim * self.frame_stack
+        if self.use_target_state:
+            state_dim += self.frame_stack
+        return specs.Array(shape=(state_dim,), dtype=np.float32, name='observation')
+
+    def action_spec(self):
+        return self._env.action_spec()
+
+    def __getattr__(self, name):
+        return getattr(self._env, name)
+
+
+class CTEncoderStackWrapper(dm_env.Environment):
     def __init__(self, env, expert, context_translator, expert_env, context_camera_ids, n_video, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False):
         self._env = env
 

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -33,6 +35,22 @@ class ViRLNet(nn.Module):
         h, _ = self.lstm_enc(e_seq)  # 1 x h
         h = h[0]
         return h
+
+    def encode_state_seq(self, e_seq):
+        e_seq = e_seq.unsqueeze(0)  # 1 x T x z
+        e_seq = torch.transpose(e_seq, dim0=0, dim1=1)  # T x 1 x c x h x w
+        h, _ = self.lstm_enc(e_seq)  # 1 x h
+        h = h[0]
+        return h
+
+    def encode_frame(self, image):
+        shape = image.shape
+        if len(shape) == 3:
+            image = image.unsqueeze(0)  # 1 x c x h x w
+        e = self.conv(image)[0]
+        if len(shape) == 3:
+            return e[0]
+        return e
 
     def encode_decode(self, video):
         T = video.shape[0]
@@ -172,6 +190,13 @@ class ViRLNet(nn.Module):
             l += F.mse_loss(o1, o2)
         l /= T
         return l
+
+    @staticmethod
+    def load(file):
+        snapshot = Path(file)
+        with snapshot.open('rb') as f:
+            payload = torch.load(f)
+        return payload['encoder']
 
 
 class ConvNet(nn.Module):

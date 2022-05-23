@@ -73,20 +73,20 @@ class Workspace:
                                   self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                   hydra.utils.instantiate(self.cfg.context_changer),
                                   episode_len=self.cfg.episode_len)
-        self.train_env = dmc.EncodeStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
-                                                self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                dist_reward=True)
+        self.train_env = dmc.CTEncoderStackWrapper(self.train_env, self.expert, self.context_translator, self.expert_env,
+                                                   self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                                   self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                   dist_reward=True)
 
         self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                  self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                  context_changers.ReacherHardContextChanger(),
                                  episode_len=self.cfg.episode_len)
-        self.eval_env = dmc.EncodeStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
-                                               self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                               self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                               dist_reward=False)
+        self.eval_env = dmc.CTEncoderStackWrapper(self.eval_env, self.expert, self.context_translator, self.expert_env,
+                                                  self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
+                                                  self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                  dist_reward=False)
 
         # create replay buffer
         data_specs = (
