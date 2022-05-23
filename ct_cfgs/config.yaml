@@ -1,33 +1,36 @@
 defaults:
   - _self_
+  - task@_global_: reacher_hard
 
 seed: 1
 
-exp_group: ${now:%Y.%m.%d}
-exp_id: ${now:%H%M%S}
-
-num_epochs: 1000
-eval_every_epochs: 10
+num_epochs: 18001
+eval_every_epochs: 20
 num_evaluations: 5
-batch_size: 16
-episode_len: 100
+batch_size: 32
+episode_len: 30
 num_workers: 4
 
-train_finger_video_dir: 'videos/finger_spin/train'
-valid_finger_video_dir: 'videos/finger_spin/valid'
-
+same_video: false
 
 use_tb: true
 
 ct_model:
   _target_: ct_model.CTNet
   lr: 10e-4
-  lambda_1: 0.
-  lambda_2: 0.
+  lambda_trans: 1.
+  lambda_rec: 1.
+  lambda_align: 1.
   hidden_dim: 1024
   use_tb: ${use_tb}
 
+translator_model:
+  _target_: ct_model.TranslatorNet
+  hidden_dim: ${ct_model.hidden_dim}
 
+
+exp_group: ${now:%Y.%m.%d}
+exp_id: ${now:%H%M%S}
 
 hydra:
   run:

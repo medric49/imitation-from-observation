@@ -1,22 +1,27 @@
+import random
 from pathlib import Path
 
+import gc
+
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
 
 
 class CTNet(nn.Module):
-    def __init__(self, hidden_dim, lr, lambda_1, lambda_2, use_tb):
+    def __init__(self, hidden_dim, lr, lambda_trans, lambda_rec, lambda_align, use_tb, translator):
         super(CTNet, self).__init__()
-        
-        self.lambda_1 = lambda_1
-        self.lambda_2 = lambda_2
+
+        self.lambda_trans = lambda_trans
+        self.lambda_rec = lambda_rec
+        self.lambda_align = lambda_align
 
         self.use_tb = use_tb
 
         self.enc1 = EncoderNet(hidden_dim)
         self.enc2 = EncoderNet(hidden_dim)
-        self.t = TranslatorNet(hidden_dim)
+        self.t = translator
         self.dec = DecoderNet(hidden_dim)
 
         self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
@@ -24,27 +29,36 @@ class CTNet(nn.Module):
         self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
         self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
     
-    def translate(self, video1, fobs2, return_state=False):
+    def translate(self, video1, fobs2, keep_enc2=True):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # T x c x h x w
-        fobs2 = fobs2.to(dtype=torch.float).repeat(T, 1, 1, 1) / 255. - 0.5  # T x c x h x w
+        fobs2 = fobs2.to(dtype=torch.float) / 255. - 0.5  # c x h x w
+        video1 = video1.unsqueeze(dim=1)
+        fobs2 = fobs2.unsqueeze(dim=0)
 
-        z1, _, _, _, _ = self.enc1(video1)
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = torch.stack(z1_seq)
+
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
-        z3 = self.t(z1, fz2)
-        z3[0] = fz2[0]
 
-        if return_state:
-            return z3
+        z3_seq = self.t(z1_seq, fz2)
 
-        video2 = self.dec(z3, c1, c2, c3, c4)  # T x c x h x w
-        video2[0] = fobs2[0]
+        video2 = [self.dec(z3_seq[t], c1, c2, c3, c4) for t in range(T)]  # T x c x h x w
+        video2 = torch.stack(video2)
+
+        z3_seq = z3_seq.squeeze(dim=1)
+        video2 = video2.squeeze(dim=1)
+        if keep_enc2:
+            video2[0] = fobs2[0]
         video2 = (video2 + 0.5) * 255.
-        return video2
+        video2[video2 > 255.] = 255.
+        video2[video2 < 0.] = 0.
+        return z3_seq, video2
 
     def evaluate(self, video1, video2):
-        T = video1.shape[0]
+        T = video1.shape[1]
+        n = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
         video2 = video2.to(dtype=torch.float) / 255. - 0.5  # n x T x c x h x w
@@ -58,24 +72,42 @@ class CTNet(nn.Module):
         l_rec = 0
         l_align = 0
 
+        l_sim = 0
+        delay = 3
+
         fz2, c1, c2, c3, c4 = self.enc2(fobs2)
+
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = torch.stack(z1_seq)
+        z3_seq = self.t(z1_seq, fz2)
+
+        z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
+        z2_seq = torch.stack(z2_seq)
+
+        # prev_obs_z3 = self.dec(z3_seq[0], c1, c2, c3, c4)
+        # prev_obs_z2 = self.dec(z2_seq[0], c1, c2, c3, c4)
+        # prev_obs2 = video2[0]
         for t in range(T):
-            obs1 = video1[t]  # n x c x h x w
-            obs2 = video2[t]  # n x c x h x w
+            obs2 = video2[t]
+            obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
+            obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
 
-            z1, _, _, _, _ = self.enc1(obs1)
-            z3 = self.t(z1, fz2)
-            z2, _, _, _, _ = self.enc1(obs2)
+            l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1))  # + F.mse_loss(torch.flatten(obs_z3 - prev_obs_z3, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
+            l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))  # + F.mse_loss(torch.flatten(obs_z2 - prev_obs_z2, start_dim=1), torch.flatten(obs2 - prev_obs2, start_dim=1))
+            l_align += F.mse_loss(z3_seq[t], z2_seq[t])
 
-            l_trans += F.mse_loss(torch.flatten(self.dec(z3, c1, c2, c3, c4), start_dim=1),
-                                  torch.flatten(obs2, start_dim=1))
-            l_rec += F.mse_loss(torch.flatten(self.dec(z2, c1, c2, c3, c4), start_dim=1),
-                                torch.flatten(obs2, start_dim=1))
-            l_align += F.mse_loss(z3, z2)
+            t_2 = random.choice(list(np.arange(0, t-delay)) + list(np.arange(t+delay, T)))
+            l_sim += F.cosine_similarity(z3_seq[t], z3_seq[t_2]).abs().mean()
 
-        loss = l_trans + l_rec * self.lambda_1 + l_align * self.lambda_2
+            # prev_obs_z3 = obs_z3
+            # prev_obs_z2 = obs_z2
+            # prev_obs2 = obs2
 
-        return loss, l_trans, l_rec, l_align
+        l_sim /= T
+
+        loss = l_trans * self.lambda_trans + l_rec * self.lambda_rec + l_align * self.lambda_align + l_sim * 0.1
+
+        return loss, l_trans, l_rec, l_align, l_sim
 
     def update(self, video1, video2):
         metrics = dict()
@@ -85,7 +117,7 @@ class CTNet(nn.Module):
         self._t_opt.zero_grad()
         self._dec_opt.zero_grad()
 
-        loss, l_trans, l_rec, l_align = self.evaluate(video1, video2)
+        loss, l_trans, l_rec, l_align, l_sim = self.evaluate(video1, video2)
         
         loss.backward()
         
@@ -99,12 +131,22 @@ class CTNet(nn.Module):
             metrics['trans_loss'] = l_trans.item()
             metrics['rec_loss'] = l_rec.item()
             metrics['align_loss'] = l_align.item()
+            metrics['sim_loss'] = l_sim.item()
 
         return metrics
+
+    def encode(self, obs):
+        obs = obs.to(dtype=torch.float) / 255. - 0.5
+        obs, _, _, _, _ = self.enc1(obs)
+        return obs
 
     @staticmethod
     def load(file):
         snapshot = Path(file)
+        
+        torch.cuda.empty_cache()
+        gc.collect()
+        # print(torch.cuda.memory_summary(abbreviated=False))
         with snapshot.open('rb') as f:
             payload = torch.load(f)
         return payload['context_translator']
@@ -141,12 +183,19 @@ class EncoderNet(nn.Module):
 class TranslatorNet(nn.Module):
     def __init__(self, hidden_dim):
         super(TranslatorNet, self).__init__()
-        self.translator = nn.Linear(hidden_dim * 2, hidden_dim)
+        self.translator = nn.Sequential(
+            nn.Linear(hidden_dim * 2, hidden_dim),
+            nn.LeakyReLU(0.2),
+            nn.Linear(hidden_dim, hidden_dim)
+        )
 
-    def forward(self, z1, z2):
-        z = torch.cat([z1, z2], dim=1)
-        z = self.translator(z)
-        return z
+    def forward(self, z1_seq, fz2):
+        z3_seq = []
+        for z1 in z1_seq:
+            z3 = self.translator(torch.cat([z1, fz2], dim=1))
+            z3_seq.append(z3)
+        z3_seq = torch.stack(z3_seq)
+        return z3_seq
 
 
 class DecoderNet(nn.Module):
@@ -173,6 +222,10 @@ class DecoderNet(nn.Module):
         self.t_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
 
     def forward(self, z, c1, c2, c3, c4):
+        # print(torch.cuda.memory_summary(device=None, abbreviated=False))
+        torch.cuda.empty_cache()
+        gc.collect()
+
         z = z.view(z.shape[0], z.shape[1], 1, 1)
         d4 = self.leaky_relu(self.b_norm_fc(self.fc(z)))
         d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
@@ -189,3 +242,15 @@ class DecoderNet(nn.Module):
         obs = self.leaky_relu(self.t_conv_1(d1))
         return obs
 
+
+class LSTMTranslatorNet(nn.Module):
+    def __init__(self, hidden_dim):
+        super(LSTMTranslatorNet, self).__init__()
+        self.num_layers = 2
+        self.translator = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
+
+    def forward(self, z1_seq, z2):
+        c0 = z2.repeat(self.num_layers, 1, 1)
+        h0 = torch.zeros_like(z2).repeat(self.num_layers, 1, 1)
+        z3_seq, _ = self.translator(z1_seq, (h0, c0))
+        return z3_seq

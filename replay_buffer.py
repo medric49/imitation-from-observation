@@ -1,7 +1,3 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
 import datetime
 import io
 import random
@@ -157,7 +153,76 @@ class ReplayBuffer(IterableDataset):
             step_reward = episode['reward'][idx + i]
             reward += discount * step_reward
             discount *= episode['discount'][idx + i] * self._discount
-        return (obs, action, reward, discount, next_obs)
+        return obs, action, reward, discount, next_obs
+
+    def sample_recent_data(self, batch_size, nstep, rtg=False):
+        try:
+            self._try_fetch()
+        except:
+            traceback.print_exc()
+        self._samples_since_last_fetch += 1
+
+        start_index = len(self._episode_fns)
+        length = 0
+        while length < batch_size:
+            start_index -= 1
+            length += episode_len(self._episodes[self._episode_fns[start_index]])
+
+        episodes = [self._episodes[episode_fn] for episode_fn in self._episode_fns[start_index:]]
+        observations = np.concatenate([episode['observation'][:-nstep] for episode in episodes])
+        next_observations = np.concatenate([episode['observation'][nstep:] for episode in episodes])
+        if nstep == 1:
+            actions = np.concatenate([episode['action'][1:] for episode in episodes])
+        else:
+            actions = np.concatenate([episode['action'][1:-nstep+1] for episode in episodes])
+
+        rewards = []
+        for episode in episodes:
+            if rtg:
+                reward = self._discounted_cumsum(episode['reward'])
+            else:
+                reward = self._discounted_cumsum(episode['reward'], limit=nstep)
+            if nstep == 1:
+                rewards.append(reward[1:])
+            else:
+                rewards.append(reward[1:-nstep + 1])
+        rewards = np.concatenate(rewards)
+
+        discounts = np.ones((observations.shape[0], 1), dtype=np.float32) * (self._discount ** nstep)
+
+        terminals = []
+        for episode in episodes:
+            terminal = np.zeros((episode['observation'].shape[0]), dtype=np.float32)
+            terminal[-1] = 1
+            terminal = terminal[nstep:]
+            terminals.append(terminal)
+        terminals = np.concatenate(terminals).reshape((-1, 1))
+
+        obs = observations[-batch_size:]
+        action = actions[-batch_size:]
+        reward = rewards[-batch_size:]
+        next_obs = next_observations[-batch_size:]
+        discount = discounts[-batch_size:]
+        terminal = terminals[-batch_size:]
+
+        return obs, action, reward, discount, next_obs, terminal
+
+    def _discounted_return(self, rewards):
+        discounted_return = sum([(self._discount ** i) * r for i, r in enumerate(rewards)])
+        list_of_discounted_returns = np.ones((len(rewards),)) * discounted_return
+        return list_of_discounted_returns
+
+    def _discounted_cumsum(self, rewards, limit=None):
+        if limit is not None:
+            list_of_discounted_cumsums = np.array(
+                [sum([(self._discount ** i) * r for i, r in enumerate(rewards[t: t + limit])])
+                 for t in range(len(rewards))])
+        else:
+            list_of_discounted_cumsums = np.array(
+                [sum([(self._discount ** i) * r for i, r in enumerate(rewards[t:])])
+                 for t in range(len(rewards))])
+
+        return list_of_discounted_cumsums
 
     def __iter__(self):
         while True:
@@ -171,7 +236,7 @@ def _worker_init_fn(worker_id):
 
 
 def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
-                       save_snapshot, nstep, discount):
+                       save_snapshot, nstep, discount, fetch_every=1000):
     max_size_per_worker = max_size // max(1, num_workers)
 
     iterable = ReplayBuffer(replay_dir,
@@ -179,7 +244,7 @@ def make_replay_loader(replay_dir, max_size, batch_size, num_workers,
                             num_workers,
                             nstep,
                             discount,
-                            fetch_every=1000,
+                            fetch_every=fetch_every,
                             save_snapshot=save_snapshot)
 
     loader = torch.utils.data.DataLoader(iterable,

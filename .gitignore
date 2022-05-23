@@ -3,9 +3,32 @@ __pycache__
 exp_local
 videos
 ct_exp_local
+
 env
+ct
+rl_exp_local
+results
+
+mujoco_env
+rllab
+sandbox
+gym
+virl_exp_local
+
+>>>>>>> 13d322fffb588689b34b9735ccd2a34881ff6012
 venv
 *.sh
 *.ipynb
 !*_example.ipynb
+*.out
+irl_exp_local
+ac_exp_local
+ifo_exp_local
+interbotix_ros_manipulators
 
+data
+run_logs
+ac
+rl
+virl
+.vscode/

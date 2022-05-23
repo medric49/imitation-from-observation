@@ -1,19 +1,14 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved.
-#
-# This source code is licensed under the MIT license found in the
-# LICENSE file in the root directory of this source tree.
 import random
 import re
 import time
-import io
+from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from omegaconf import OmegaConf
 from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
+from tqdm import tqdm
 
 
 class eval_mode:
@@ -150,21 +145,73 @@ def schedule(schdl, step):
     raise NotImplementedError(schdl)
 
 
-
-def save_episode(episode, fn):
-    with io.BytesIO() as bs:
-        np.savez_compressed(bs, **episode)
-        bs.seek(0)
-        with fn.open('wb') as f:
-            f.write(bs.read())
-
-
-def load_episode(fn):
-    with fn.open('rb') as f:
-        episode = np.load(f)
-        episode = {k: episode[k] for k in episode.keys()}
-        return episode
-
-
 def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+
+
+def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=None):
+    root_dir = Path(root_dir)
+    root_dir.mkdir(parents=True, exist_ok=True)
+
+    expert.train(training=False)
+
+    im_w, im_h = 64, 64
+
+    def act(time_step):
+        action = expert.act(time_step.observation, 1, eval_mode=True)
+        return action
+
+    def make_video(parent_dir):
+        cameras = {id: [] for id in cam_ids}
+        context_changer.reset()
+
+        time_step = env.reset()
+
+        with change_context(env, context_changer):
+            for cam_id, cam in cameras.items():
+                cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+
+        for _ in range(num_frames):
+            action = act(time_step)
+            time_step = env.step(action)
+
+            with change_context(env, context_changer):
+                for cam_id, cam in cameras.items():
+                    cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
+
+        videos = np.array(list(cameras.values()), dtype=np.uint8)
+        np.save(parent_dir / f'{int(time.time()*1000)}', videos)
+
+    with torch.no_grad():
+        if num_valid is not None:
+            video_dir = root_dir / 'train'
+            video_dir.mkdir(exist_ok=True)
+            for _ in tqdm(range(num_train)):
+                make_video(video_dir)
+            video_dir = root_dir / 'valid'
+            video_dir.mkdir(exist_ok=True)
+            for _ in tqdm(range(num_valid)):
+                make_video(video_dir)
+        else:
+            for _ in tqdm(range(num_train)):
+                make_video(root_dir)
+
+
+class change_context:
+    def __init__(self, env, context_changer):
+        self.env = env
+        self.context_changer = context_changer
+
+    def __enter__(self):
+        self.context_changer.change_env(self.env)
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.context_changer.reset_env(self.env)
+
+
+def normalize(data, mean, std, eps=1e-8):
+    return (data - mean) / (std + eps)
+
+
+def unnormalize(data, mean, std):
+    return data * std + mean
