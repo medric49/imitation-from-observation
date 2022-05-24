@@ -38,13 +38,14 @@ class ViRLNet(nn.Module):
 
     def encode_state_seq(self, e_seq):
         e_seq = e_seq.unsqueeze(0)  # 1 x T x z
-        e_seq = torch.transpose(e_seq, dim0=0, dim1=1)  # T x 1 x c x h x w
+        e_seq = torch.transpose(e_seq, dim0=0, dim1=1)  # T x 1 x z
         h, _ = self.lstm_enc(e_seq)  # 1 x h
         h = h[0]
         return h
 
     def encode_frame(self, image):
         shape = image.shape
+        image = image.to(dtype=torch.float) / 255. - 0.5
         if len(shape) == 3:
             image = image.unsqueeze(0)  # 1 x c x h x w
         e = self.conv(image)[0]
