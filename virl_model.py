@@ -255,16 +255,16 @@ class DeconvNet(nn.Module):
     def forward(self, e, c1, c2, c3, c4):
         e = e.view(e.shape[0], e.shape[1], 1, 1)
         d4 = self.leaky_relu(self.b_norm_fc(self.fc(e)))
-        d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
+        # d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
 
         d3 = self.leaky_relu(self.b_norm_4(self.t_conv_4(d4)))
-        d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
+        # d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
 
         d2 = self.leaky_relu(self.b_norm_3(self.t_conv_3(d3)))
-        d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
+        # d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
 
         d1 = self.leaky_relu(self.b_norm_2(self.t_conv_2(d2)))
-        d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
+        # d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
 
         obs = self.leaky_relu(self.t_conv_1(d1))
         return obs
@@ -292,6 +292,9 @@ class LSTMDecoder(nn.Module):
         self.decoder = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
 
     def forward(self, h, hidden, T):
+        h0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
+        c0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
+        hidden = (h0, c0)
         h = h.unsqueeze(0)
         e_seq = []
         for _ in range(T):
