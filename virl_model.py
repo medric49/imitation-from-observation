@@ -292,9 +292,9 @@ class LSTMDecoder(nn.Module):
         self.decoder = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
 
     def forward(self, h, hidden, T):
-        h0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
-        c0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
-        hidden = (h0, c0)
+        # h0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
+        # c0 = torch.zeros(h.shape).repeat(self.num_layers, 1, 1).to(device=h.device)
+        # hidden = (h0, c0)
         h = h.unsqueeze(0)
         e_seq = []
         for _ in range(T):
