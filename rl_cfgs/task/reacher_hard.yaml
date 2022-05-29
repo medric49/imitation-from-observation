@@ -1,5 +1,5 @@
 defaults:
-  - easy
+  - medium
   - _self_
 
 task_name: reacher_hard
