@@ -84,10 +84,16 @@ class ReacherHardContextChanger(ContextChanger):
 
 
 class ReacherHardTargetSwitcherContextChanger(ReacherHardContextChanger):
+    def reset(self):
+        super(ReacherHardTargetSwitcherContextChanger, self).reset()
+
+        self.target_pos = [random.uniform(0.01, 0.2) * random.choice([-1, 1]), random.uniform(0.01, 0.2) * random.choice([-1, 1]), .01]
+
     def change_env(self, env):
         super(ReacherHardTargetSwitcherContextChanger, self).change_env(env)
         env.physics.named.model.geom_size['target'] = 0.
         env.physics.named.model.geom_size['target_1'] = .015
+        env.physics.named.data.geom_xpos['target_1'] = self.target_pos
 
     def reset_env(self, env):
         super(ReacherHardTargetSwitcherContextChanger, self).reset_env(env)
