@@ -2,6 +2,6 @@ defaults:
   - medium
   - _self_
 
-task_name: default
+task_name: walker_run
 nstep: 1
 batch_size: 512
