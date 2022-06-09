@@ -307,7 +307,5 @@ class LSTMDecoder(nn.Module):
             h = h.squeeze(0)
             e_seq.append(h)
 
-
-
         e_seq = torch.stack(e_seq)
         return e_seq
