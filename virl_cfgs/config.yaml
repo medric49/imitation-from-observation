@@ -22,7 +22,7 @@ virl_model:
   lambda_2: 0.1
   lambda_3: 0.1
   lambda_4: 0.1
-  hidden_dim: 128
+  hidden_dim: 64
   rho: 1
 
 
