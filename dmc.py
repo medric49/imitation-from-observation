@@ -225,7 +225,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 e_2 = agent_e_seq[-1].cpu().numpy()
             reward_1 = -np.linalg.norm(h_1 - h_2)
             reward_2 = -np.linalg.norm(e_1 - e_2)
-            reward = reward_1 + reward_2
+            reward = reward_2
         else:
             reward = time_step.reward
 
