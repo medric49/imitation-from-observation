@@ -200,6 +200,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         state = self.encode(time_step.observation)
         self.agent_states.append(state[-self.state_dim:])
+        state = self.encoder.encode_state_seq(self.agent_states)
 
         if self.use_target_state:
             target_state = self.expert_states[self.step_id + 1]
@@ -212,6 +213,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         state = self.encode(time_step.observation)
         self.agent_states.append(state[-self.state_dim:])
+        state = self.encoder.encode_state_seq(self.agent_states)
 
         if self.dist_reward:
             with torch.no_grad():
@@ -225,7 +227,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 e_2 = agent_e_seq[-1].cpu().numpy()
             reward_1 = -np.linalg.norm(h_1 - h_2)
             reward_2 = -np.linalg.norm(e_1 - e_2)
-            reward = reward_2
+            reward = reward_1 + reward_2
         else:
             reward = time_step.reward
 
