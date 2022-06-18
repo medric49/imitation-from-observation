@@ -18,7 +18,15 @@ class ContextChanger:
 
 
 class ReacherHardContextChanger(ContextChanger):
+    def __init__(self, multi_reset=True):
+        self.multi_reset = multi_reset
+        self.is_reset = False
+
+        super().__init__()
+
     def reset(self):
+        if not self.multi_reset and self.is_reset:
+            return
         self.target_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
         self.arm_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, 1]
 
@@ -39,6 +47,8 @@ class ReacherHardContextChanger(ContextChanger):
         self.c3_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, self.c3_visible]
         self.c4_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, self.c4_visible]
         self.c5_color = [random.random() * 0.5, random.random() * 0.5, random.random() * 0.5, self.c5_visible]
+
+        self.is_reset = True
 
     def change_env(self, env):
         env.physics.named.model.mat_texid['grid'] = -1
