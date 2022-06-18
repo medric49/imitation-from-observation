@@ -1,11 +1,12 @@
 defaults:
-  - easy
+  - medium
   - _self_
 
 task_name: walker_run
 
 expert_file: experts/walker_run.pt
 ct_file: ct/walker_run.pt
+virl_file: virl/walker_run.pt
 xml_path: domain_xmls/walker.xml
 
 context_camera_ids: [0]
