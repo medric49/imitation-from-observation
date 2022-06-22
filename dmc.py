@@ -131,7 +131,7 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class ViRLEncoderStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False):
+    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False, use_frame_state=True):
 
         self._env = env
 
@@ -151,6 +151,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.state_dim = state_dim
         self.dist_reward = dist_reward
         self.use_target_state = use_target_state
+        self.use_frame_state = use_frame_state
 
         self.expert_states = None
         self.agent_states = None
@@ -196,7 +197,10 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         self.agent_states.append(self.encode(time_step.observation))
         with torch.no_grad():
-            state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
+            if self.use_frame_state:
+                state = self.agent_states[-1]
+            else:
+                state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
 
         if self.use_target_state:
             target_state = self.expert_states[self.step_id + 1]
@@ -209,27 +213,28 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         self.agent_states.append(self.encode(time_step.observation))
         with torch.no_grad():
-            state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
+            if self.use_frame_state:
+                state = self.agent_states[-1]
+            else:
+                state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
 
         if self.dist_reward:
             with torch.no_grad():
-                # expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
-                # agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
-                #
+                reward_1 = 0
+                reward_2 = 0
+
+                expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
+                agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+
                 # h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
                 # h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
-                #
-                # e_1 = expert_e_seq[-1].cpu().numpy()
-                # e_2 = agent_e_seq[-1].cpu().numpy()
+                # reward_1 += -np.linalg.norm(h_1 - h_2)
 
-                expert_e_seq = torch.tensor(self.expert_states[:self.step_id + 1], dtype=torch.float,
-                                            device=utils.device())
-                h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
-                h_2 = state
+                e_1 = expert_e_seq[-1].cpu().numpy()
+                e_2 = agent_e_seq[-1].cpu().numpy()
+                reward_2 += -np.linalg.norm(e_1 - e_2)
 
-            reward_1 = -np.linalg.norm(h_1 - h_2)
-            # reward_2 = -np.linalg.norm(e_1 - e_2)
-            reward = reward_1  # + reward_2
+            reward = reward_1 + reward_2
         else:
             reward = time_step.reward
 
