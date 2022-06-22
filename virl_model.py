@@ -141,7 +141,10 @@ class ViRLNet(nn.Module):
         l_sni = self.loss_sni(e_seq_i, e_seq_p, e_seq_n)
         l_raes = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
         l_vaei = self.loss_vae(video_i, video1_i) + self.loss_vae(video_p, video1_p)
-        loss = self.lambda_1 * l_sns + self.lambda_2 * l_sni + self.lambda_3 * l_raes + self.lambda_4 * l_vaei
+        loss = self.lambda_1 * l_sns
+        loss += self.lambda_2 * l_sni
+        loss += self.lambda_3 * l_raes
+        loss += self.lambda_4 * l_vaei
 
         metrics = {
             'loss': loss.item(),
@@ -224,7 +227,7 @@ class ConvNet(nn.Module):
         c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
         c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.sigmoid(self.fc2(e))  # self.leaky_relu(self.fc2(e))
+        e = self.leaky_relu(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
         return e, c1, c2, c3, c4
 
@@ -284,7 +287,7 @@ class LSTMEncoder(nn.Module):
     def forward(self, e_seq):
         h_seq, hidden = self.encoder(e_seq)
         h = h_seq[-1]
-        h = self.sigmoid(self.fc(h))
+        h = self.fc(h)
         return h, hidden
 
 
@@ -293,18 +296,15 @@ class LSTMDecoder(nn.Module):
         super(LSTMDecoder, self).__init__()
         self.num_layers = 2
         self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
-        self.fc = nn.Linear(input_size, input_size)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, h, hidden, T):
         # hidden = None
-        h = self.fc(h)
         e_seq = []
         for _ in range(T):
             h = h.unsqueeze(0)
             h, hidden = self.decoder(h, hidden)
             h = h.squeeze(0)
-            e_seq.append(self.sigmoid(h))
+            e_seq.append(h)
 
         e_seq = torch.stack(e_seq)
         return e_seq

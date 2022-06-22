@@ -149,7 +149,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
     @staticmethod
     def random_shuffle(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor, p=0.5):
-        shuffle = np.random.rand() > p
+        shuffle = np.random.rand() < p
         if shuffle:
             indx = torch.randperm(video_i.shape[0])
             video_i = video_i[indx]
