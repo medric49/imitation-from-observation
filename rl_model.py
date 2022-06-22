@@ -28,8 +28,7 @@ class Actor(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
         super().__init__()
 
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
+        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim), nn.Tanh())
 
         self.policy = nn.Sequential(nn.Linear(feature_dim, hidden_dim),
                                     nn.ReLU(inplace=True),
@@ -54,8 +53,7 @@ class Critic(nn.Module):
     def __init__(self, repr_dim, action_shape, feature_dim, hidden_dim):
         super().__init__()
 
-        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim),
-                                   nn.LayerNorm(feature_dim), nn.Tanh())
+        self.trunk = nn.Sequential(nn.Linear(repr_dim, feature_dim), nn.Tanh())
 
         self.Q1 = nn.Sequential(
             nn.Linear(feature_dim + action_shape[0], hidden_dim),
@@ -92,10 +90,10 @@ class RLAgent(nn.Module):
         self.stddev_clip = stddev_clip
 
         # models
-        self.encoder = Encoder(state_dim, repr_dim)
-        self.actor = Actor(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
-        self.critic_target = Critic(repr_dim, action_shape, feature_dim, hidden_dim)
+        # self.encoder = Encoder(state_dim, repr_dim)
+        self.actor = Actor(state_dim, action_shape, feature_dim, hidden_dim)
+        self.critic = Critic(state_dim, action_shape, feature_dim, hidden_dim)
+        self.critic_target = Critic(state_dim, action_shape, feature_dim, hidden_dim)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         # optimizers
@@ -109,13 +107,11 @@ class RLAgent(nn.Module):
 
     def train(self, training=True):
         self.training = training
-        self.encoder.train(training)
         self.actor.train(training)
         self.critic.train(training)
 
     def act(self, state, step, eval_mode):
         state = state.unsqueeze(0)
-        state = self.encoder.encoder(state)
         stddev = utils.schedule(self.stddev_schedule, step)
         dist = self.actor(state, stddev)
         if eval_mode:
@@ -151,11 +147,9 @@ class RLAgent(nn.Module):
             metrics['critic_loss'] = critic_loss.item()
 
         # optimize critic
-        self.encoder_opt.zero_grad(set_to_none=True)
         self.critic_opt.zero_grad(set_to_none=True)
         critic_loss.backward()
         self.critic_opt.step()
-        self.encoder_opt.step()
 
         return metrics
 
@@ -192,10 +186,6 @@ class RLAgent(nn.Module):
         batch = next(replay_iter)
         state, action, reward, discount, next_state = utils.to_torch(
             batch, utils.device())
-
-        state = self.encoder(state)
-        with torch.no_grad():
-            next_state = self.encoder(next_state)
 
         if self.use_tb:
             metrics['batch_reward'] = reward.mean().item()
