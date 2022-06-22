@@ -180,15 +180,11 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         return e_seq
 
     def encode(self, observation):
-        frames = []
-        for i in range(self.frame_stack):
-            index = i * self.init_channel
-            frames.append(observation[index: index + self.init_channel, :, :])
-        frames = np.array(frames)
-        frames = torch.tensor(frames, device=utils.device(), dtype=torch.float)
+        frame = observation[-self.init_channel:]
         with torch.no_grad():
-            states = self.encoder.encode_frame(frames)
-            state = states.view((-1,)).cpu().numpy()
+            frame = torch.tensor(frame, device=utils.device(), dtype=torch.float)
+            state = self.encoder.encode_frame(frame)
+            state = state.cpu().numpy()
         return state
 
     def reset(self) -> TimeStep:
@@ -198,8 +194,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         time_step = self._env.reset()
         self.step_id = 0
 
-        state = self.encode(time_step.observation)
-        self.agent_states.append(state[-self.state_dim:])
+        self.agent_states.append(self.encode(time_step.observation))
         with torch.no_grad():
             state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
 
@@ -212,21 +207,26 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         time_step = self._env.step(action)
         self.step_id += 1
 
-        state = self.encode(time_step.observation)
-        self.agent_states.append(state[-self.state_dim:])
+        self.agent_states.append(self.encode(time_step.observation))
         with torch.no_grad():
             state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
 
         if self.dist_reward:
             with torch.no_grad():
-                expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
-                agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                # expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
+                # agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                #
+                # h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
+                # h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
+                #
+                # e_1 = expert_e_seq[-1].cpu().numpy()
+                # e_2 = agent_e_seq[-1].cpu().numpy()
 
+                expert_e_seq = torch.tensor(self.expert_states[:self.step_id + 1], dtype=torch.float,
+                                            device=utils.device())
                 h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
-                h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
+                h_2 = state
 
-                e_1 = expert_e_seq[-1].cpu().numpy()
-                e_2 = agent_e_seq[-1].cpu().numpy()
             reward_1 = -np.linalg.norm(h_1 - h_2)
             # reward_2 = -np.linalg.norm(e_1 - e_2)
             reward = reward_1  # + reward_2
