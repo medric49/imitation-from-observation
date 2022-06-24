@@ -20,8 +20,8 @@ virl_model:
   lr: 10e-4
   lambda_1: 0.7
   lambda_2: 0.1
-  lambda_3: 0.1
-  lambda_4: 0.1
+  lambda_3: 0.15
+  lambda_4: 0.15
   hidden_dim: 128
   rho: 1
 

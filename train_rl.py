@@ -103,13 +103,13 @@ class Workspace:
                                                        self.cfg.context_camera_ids, self.cfg.im_w,
                                                        self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                        hydra.utils.instantiate(self.cfg.context_changer),
-                                                       dist_reward=True, use_frame_state=False)
+                                                       dist_reward=True)
             self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
                                                       self.expert_env,
                                                       self.cfg.context_camera_ids, self.cfg.im_w,
                                                       self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                       hydra.utils.instantiate(self.cfg.context_changer),
-                                                      dist_reward=True, use_frame_state=False)
+                                                      dist_reward=True)
 
         # create replay buffer
         data_specs = (

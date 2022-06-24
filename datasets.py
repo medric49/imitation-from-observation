@@ -114,7 +114,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def augment(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
         # video_i, video_p, video_n = ViRLVideoDataset.augment_images(video_i, video_p, video_n)
-        # video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
+        video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
         # video_i, video_p, video_n = ViRLVideoDataset.random_shuffle(video_i, video_p, video_n)
         video_i, video_p, video_n = ViRLVideoDataset.random_sequence_cropping(video_i, video_p, video_n)
         return video_i, video_p, video_n
@@ -160,8 +160,9 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def random_sequence_cropping(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
         T = video_i.shape[0]
-        base = sum(list(range(T)))
-        p_list = [(T - i)/base for i in range(T)]
+        # base = sum(list(range(T)))
+        # p_list = [(T - i)/base for i in range(T)]
+        p_list = [2./10 for i in range(T)]
 
         video_1, video_2, video_3 = [], [], []
         for i in range(T):

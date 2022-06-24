@@ -230,9 +230,9 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
                 reward_1 += -np.linalg.norm(h_1 - h_2)
 
-                # e_1 = expert_e_seq[-1].cpu().numpy()
-                # e_2 = agent_e_seq[-1].cpu().numpy()
-                # reward_2 += -max(np.linalg.norm(e_1 - e_2), 1.5)
+                e_1 = expert_e_seq[-1].cpu().numpy()
+                e_2 = agent_e_seq[-1].cpu().numpy()
+                reward_2 += -max(np.linalg.norm(e_1 - e_2), 1.5)
 
             reward = reward_1 + reward_2
         else:

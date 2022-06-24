@@ -33,14 +33,14 @@ class ViRLNet(nn.Module):
         video = torch.transpose(video, dim0=0, dim1=1)  # T x 1 x c x h x w
         e_seq, _, _, _, _ = self._encode(video)
         h, _ = self.lstm_enc(e_seq)  # 1 x h
-        h = h[-1][0]
+        h = h[0]
         return h
 
     def encode_state_seq(self, e_seq):
         e_seq = e_seq.unsqueeze(0)  # 1 x T x z
         e_seq = torch.transpose(e_seq, dim0=0, dim1=1)  # T x 1 x z
         h, _ = self.lstm_enc(e_seq)  # 1 x h
-        h = h[-1][0]
+        h = h[0]
         return h
 
     def encode_frame(self, image):
@@ -283,9 +283,8 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, e_seq):
         h_seq, hidden = self.encoder(e_seq)
-        # h = h_seq[-1]
-        # h = self.fc(h)
-        h_seq = torch.stack([self.fc(h_seq[i] for i in range(h_seq.shape[0]))])
+        h = h_seq[-1]
+        h = self.fc(h)
         return h_seq, hidden
 
 
@@ -297,7 +296,6 @@ class LSTMDecoder(nn.Module):
 
     def forward(self, h, hidden, T):
         # hidden = None
-        h = h[-1]
         e_seq = []
         for _ in range(T):
             h = h.unsqueeze(0)
