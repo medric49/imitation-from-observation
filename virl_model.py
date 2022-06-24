@@ -142,7 +142,7 @@ class ViRLNet(nn.Module):
         l_raes = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
         l_vaei = self.loss_vae(video_i, video1_i) + self.loss_vae(video_p, video1_p)
         loss = self.lambda_1 * l_sns
-        loss += self.lambda_2 * l_sni
+        # loss += self.lambda_2 * l_sni
         loss += self.lambda_3 * l_raes
         loss += self.lambda_4 * l_vaei
 

@@ -59,17 +59,17 @@ class ReacherHardContextChanger(ContextChanger):
         # env.physics.named.model.geom_rgba['root'] = self.arm_color
         # env.physics.named.model.geom_rgba['finger'] = self.arm_color
 
-        env.physics.named.data.geom_xpos['c1'] = self.c1_pos
-        env.physics.named.data.geom_xpos['c2'] = self.c2_pos
-        env.physics.named.data.geom_xpos['c3'] = self.c3_pos
-        env.physics.named.data.geom_xpos['c4'] = self.c4_pos
-        env.physics.named.data.geom_xpos['c5'] = self.c5_pos
-
-        env.physics.named.model.geom_rgba['c1'] = self.c1_color
-        env.physics.named.model.geom_rgba['c2'] = self.c2_color
-        env.physics.named.model.geom_rgba['c3'] = self.c3_color
-        env.physics.named.model.geom_rgba['c4'] = self.c4_color
-        env.physics.named.model.geom_rgba['c5'] = self.c5_color
+        # env.physics.named.data.geom_xpos['c1'] = self.c1_pos
+        # env.physics.named.data.geom_xpos['c2'] = self.c2_pos
+        # env.physics.named.data.geom_xpos['c3'] = self.c3_pos
+        # env.physics.named.data.geom_xpos['c4'] = self.c4_pos
+        # env.physics.named.data.geom_xpos['c5'] = self.c5_pos
+        #
+        # env.physics.named.model.geom_rgba['c1'] = self.c1_color
+        # env.physics.named.model.geom_rgba['c2'] = self.c2_color
+        # env.physics.named.model.geom_rgba['c3'] = self.c3_color
+        # env.physics.named.model.geom_rgba['c4'] = self.c4_color
+        # env.physics.named.model.geom_rgba['c5'] = self.c5_color
 
     def reset_env(self, env):
         env.physics.named.model.mat_texid['grid'] = 1
@@ -80,17 +80,17 @@ class ReacherHardContextChanger(ContextChanger):
         # env.physics.named.model.geom_rgba['root'] = [0.5, 0.5, 0.5, 1]
         # env.physics.named.model.geom_rgba['finger'] = [0.5, 0.5, 0.5, 1]
 
-        env.physics.named.data.geom_xpos['c1'] = [0, 0, 2.5e-6]
-        env.physics.named.data.geom_xpos['c2'] = [0, 0, 2.5e-6]
-        env.physics.named.data.geom_xpos['c3'] = [0, 0, 2.5e-6]
-        env.physics.named.data.geom_xpos['c4'] = [0, 0, 2.5e-6]
-        env.physics.named.data.geom_xpos['c5'] = [0, 0, 2.5e-6]
-
-        env.physics.named.model.geom_rgba['c1'] = [0, 0, 0, 0]
-        env.physics.named.model.geom_rgba['c2'] = [0, 0, 0, 0]
-        env.physics.named.model.geom_rgba['c3'] = [0, 0, 0, 0]
-        env.physics.named.model.geom_rgba['c4'] = [0, 0, 0, 0]
-        env.physics.named.model.geom_rgba['c5'] = [0, 0, 0, 0]
+        # env.physics.named.data.geom_xpos['c1'] = [0, 0, 2.5e-6]
+        # env.physics.named.data.geom_xpos['c2'] = [0, 0, 2.5e-6]
+        # env.physics.named.data.geom_xpos['c3'] = [0, 0, 2.5e-6]
+        # env.physics.named.data.geom_xpos['c4'] = [0, 0, 2.5e-6]
+        # env.physics.named.data.geom_xpos['c5'] = [0, 0, 2.5e-6]
+        #
+        # env.physics.named.model.geom_rgba['c1'] = [0, 0, 0, 0]
+        # env.physics.named.model.geom_rgba['c2'] = [0, 0, 0, 0]
+        # env.physics.named.model.geom_rgba['c3'] = [0, 0, 0, 0]
+        # env.physics.named.model.geom_rgba['c4'] = [0, 0, 0, 0]
+        # env.physics.named.model.geom_rgba['c5'] = [0, 0, 0, 0]
 
 
 class ReacherHardTargetSwitcherContextChanger(ReacherHardContextChanger):
