@@ -207,8 +207,6 @@ class ConvNet(nn.Module):
     def __init__(self, hidden_dim):
         super(ConvNet, self).__init__()
         self.leaky_relu = nn.LeakyReLU()
-        self.sigmoid = nn.Sigmoid()
-        self.flatten = nn.Flatten()
         self.conv_1 = nn.Conv2d(3, 64, kernel_size=5, stride=2)
         self.b_norm_1 = nn.BatchNorm2d(64)
         self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
@@ -282,7 +280,6 @@ class LSTMEncoder(nn.Module):
         self.num_layers = 2
         self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
         self.fc = nn.Linear(input_size, input_size)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
         h_seq, hidden = self.encoder(e_seq)
