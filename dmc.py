@@ -250,7 +250,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
     def observation_spec(self):
         state_dim = self.state_dim * self.frame_stack
         if self.use_target_state:
-            state_dim += self.frame_stack
+            state_dim += self.state_dim
         return specs.Array(shape=(state_dim,), dtype=np.float32, name='observation')
 
     def action_spec(self):
