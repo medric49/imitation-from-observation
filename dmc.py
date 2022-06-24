@@ -226,13 +226,13 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
                 agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
 
-                # h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
-                # h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
-                # reward_1 += -np.linalg.norm(h_1 - h_2)
+                h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
+                h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
+                reward_1 += -np.linalg.norm(h_1 - h_2)
 
-                e_1 = expert_e_seq[-1].cpu().numpy()
-                e_2 = agent_e_seq[-1].cpu().numpy()
-                reward_2 += -max(np.linalg.norm(e_1 - e_2), 1.5)
+                # e_1 = expert_e_seq[-1].cpu().numpy()
+                # e_2 = agent_e_seq[-1].cpu().numpy()
+                # reward_2 += -max(np.linalg.norm(e_1 - e_2), 1.5)
 
             reward = reward_1 + reward_2
         else:

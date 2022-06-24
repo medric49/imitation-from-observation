@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     ep_len = 30
 
-    video_dir = Path('videos/reacher_hard_virl')
+    video_dir = Path('videos/reacher_hard_virl_without_context')
 
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher_2_targets.xml')
     context_changer = context_changers.ReacherHardTargetSwitcherContextChanger()
