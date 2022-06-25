@@ -1,6 +1,7 @@
 import random
 import re
 import time
+from skimage import color
 from pathlib import Path
 
 import numpy as np
@@ -215,3 +216,17 @@ def normalize(data, mean, std, eps=1e-8):
 
 def unnormalize(data, mean, std):
     return data * std + mean
+
+
+class RGB2Lab(object):
+    def __call__(self, img):
+        img = np.asarray(img, np.uint8)
+        img = color.rgb2lab(img)
+        return img
+
+
+def rgb_to_lab(img):
+    lab = RGB2Lab()
+    img = lab(img)
+    img = (img - np.array([50, 6.025, -6.6895])) / np.array([50, 92.208,  101.1675])
+    return img

@@ -1,0 +1,30 @@
+defaults:
+  - _self_
+  - task@_global_: reacher_hard
+
+seed: 1
+
+num_epochs: 16001
+eval_every_epochs: 20
+num_evaluations: 5
+batch_size: 32
+episode_len: 30
+num_workers: 4
+
+same_video: false
+
+use_tb: true
+
+cmc_model:
+  _target_: cmc_model.CMCModel
+  lr: 10e-4
+  rho: 1
+
+
+
+exp_group: ${now:%Y.%m.%d}
+exp_id: ${now:%H%M%S}
+
+hydra:
+  run:
+    dir: ./cmc_exp_local/${exp_group}/${exp_id}

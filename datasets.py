@@ -8,6 +8,8 @@ from torch import nn
 from torch.utils.data.dataset import T_co
 from torch.nn import functional as F
 
+import utils
+
 
 class RandomShiftsAug(nn.Module):
     def __init__(self, pad):
@@ -74,7 +76,7 @@ class CTVideoDataset(torch.utils.data.IterableDataset):
 
 class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
-    def __init__(self, root, episode_len, cam_ids):
+    def __init__(self, root, episode_len, cam_ids, to_lab=False):
         self._root = Path(root)
         self._num_classes = len(list(self._root.iterdir()))
         self._files = []
@@ -85,6 +87,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
         self._episode_len = episode_len
         self._cam_ids = cam_ids
+        self.to_lab = to_lab
 
     def _sample(self):
         if len(self._cam_ids) > 1:
@@ -105,6 +108,12 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         video_p = np.load(video_p)[cam2, :self._episode_len]
         video_n = np.load(video_n)[cam3, :self._episode_len]
 
+        if self.to_lab:
+            rgb_to_lab_func = np.vectorize(utils.rgb_to_lab)
+            video_i = rgb_to_lab_func(video_i)
+            video_p = rgb_to_lab_func(video_p)
+            video_n = rgb_to_lab_func(video_n)
+
         video_i = video_i.transpose(0, 3, 1, 2).copy()
         video_p = video_p.transpose(0, 3, 1, 2).copy()
         video_n = video_n.transpose(0, 3, 1, 2).copy()
@@ -114,7 +123,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def augment(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
         # video_i, video_p, video_n = ViRLVideoDataset.augment_images(video_i, video_p, video_n)
-        video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
+        # video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
         # video_i, video_p, video_n = ViRLVideoDataset.random_shuffle(video_i, video_p, video_n)
         video_i, video_p, video_n = ViRLVideoDataset.random_sequence_cropping(video_i, video_p, video_n)
         return video_i, video_p, video_n
