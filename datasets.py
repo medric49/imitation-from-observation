@@ -109,16 +109,20 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         video_n = np.load(video_n)[cam3, :self._episode_len]
 
         if self.to_lab:
-            rgb_to_lab_func = np.vectorize(utils.rgb_to_lab)
-            video_i = rgb_to_lab_func(video_i)
-            video_p = rgb_to_lab_func(video_p)
-            video_n = rgb_to_lab_func(video_n)
+            video_i = self.rgb_to_lab(video_i)
+            video_p = self.rgb_to_lab(video_p)
+            video_n = self.rgb_to_lab(video_n)
 
         video_i = video_i.transpose(0, 3, 1, 2).copy()
         video_p = video_p.transpose(0, 3, 1, 2).copy()
         video_n = video_n.transpose(0, 3, 1, 2).copy()
 
         return video_i, video_p, video_n
+
+    def rgb_to_lab(self, video):
+        T = video.shape[0]
+        return np.array([utils.rgb_to_lab(video[t]) for t in range(T)])
+
 
     @staticmethod
     def augment(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
