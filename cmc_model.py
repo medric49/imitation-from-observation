@@ -110,8 +110,8 @@ class CMCModel(nn.Module):
     def _encode(self, video):
         shape = video.shape  # T x n x c x h x w
         view_1_seq, view_2_seq = torch.split(video, [1, 2], dim=2)
-        view_1_seq = view_1_seq.view(shape[0] * shape[1], shape[2], shape[3], shape[4])  # Tn x c x h x w
-        view_2_seq = view_2_seq.view(shape[0] * shape[1], shape[2], shape[3], shape[4])  # Tn x c x h x w
+        view_1_seq = view_1_seq.view(-1, 1, shape[3], shape[4])  # Tn x c x h x w
+        view_2_seq = view_2_seq.view(-1, 2, shape[3], shape[4])  # Tn x c x h x w
         return self.conv(view_1_seq, view_2_seq)
 
     def _decode(self, e_seq, c1_seq, c2_seq, c3_seq, c4_seq):

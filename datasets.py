@@ -172,23 +172,16 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
     @staticmethod
     def random_sequence_cropping(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
-        T = video_i.shape[0]
+        T = video_i.shape[1]
         # base = sum(list(range(T)))
         # p_list = [(T - i)/base for i in range(T)]
         p_list = [2./10 for i in range(T)]
 
-        video_1, video_2, video_3 = [], [], []
-        for i in range(T):
-            keep = np.random.rand() > p_list[i]
+        indices = [i for i in range(T) if np.random.rand() > p_list[i]]
+        video_1 = video_i[:, indices, :, :, :]
+        video_2 = video_p[:, indices, :, :, :]
+        video_3 = video_n[:, indices, :, :, :]
 
-            if keep:
-                video_1.append(video_i[i])
-                video_2.append(video_p[i])
-                video_3.append(video_n[i])
-
-        video_1 = torch.stack(video_1)
-        video_2 = torch.stack(video_2)
-        video_3 = torch.stack(video_3)
         return video_1, video_2, video_3
 
     def __iter__(self) -> Iterator[T_co]:
