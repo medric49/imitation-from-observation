@@ -285,7 +285,7 @@ class LSTMEncoder(nn.Module):
         h_seq, hidden = self.encoder(e_seq)
         h = h_seq[-1]
         h = self.fc(h)
-        return h_seq, hidden
+        return h, hidden
 
 
 class LSTMDecoder(nn.Module):
