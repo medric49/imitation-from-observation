@@ -1,5 +1,7 @@
+import random
 from pathlib import Path
 
+import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -74,7 +76,7 @@ class CMCModel(nn.Module):
         super(CMCModel, self).__init__()
 
         self.rho = rho
-
+        self.hidden_dim = hidden_dim
         self.conv = ConvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
 
@@ -90,11 +92,11 @@ class CMCModel(nn.Module):
     def encode(self, video):
         e_seq = self.encode_frame(video)
         h, _ = self.lstm_enc(e_seq)
-        return h
+        return h[-1]
 
     def encode_state_seq(self, e_seq):
         h, _ = self.lstm_enc(e_seq)
-        return h
+        return h[-1]
 
     def encode_frame(self, image):
         shape = image.shape
@@ -109,18 +111,17 @@ class CMCModel(nn.Module):
 
     def _encode(self, video):
         shape = video.shape  # T x n x c x h x w
-        view_1_seq, view_2_seq = torch.split(video, [1, 2], dim=2)
-        view_1_seq = view_1_seq.view(-1, 1, shape[3], shape[4])  # Tn x c x h x w
-        view_2_seq = view_2_seq.view(-1, 2, shape[3], shape[4])  # Tn x c x h x w
-        return self.conv(view_1_seq, view_2_seq)
-
-    def _decode(self, e_seq, c1_seq, c2_seq, c3_seq, c4_seq):
-        video = []
-        for t in range(e_seq.shape[0]):
-            o = self.deconv(e_seq[t], c1_seq[t], c2_seq[t], c3_seq[t], c4_seq[t])
-            video.append(o)
-        video = torch.stack(video)
-        return video
+        e_1_seq = []
+        e_2_seq = []
+        for t in range(shape[0]):
+            frame = video[t]  # n x c x h x w
+            view_1, view_2 = torch.split(frame, [1, 2], dim=1)
+            e_1, e_2 = self.conv(view_1, view_2)
+            e_1_seq.append(e_1)
+            e_2_seq.append(e_2)
+        e_1_seq = torch.stack(e_1_seq)  # T x n x z
+        e_2_seq = torch.stack(e_2_seq)  # T x n x z
+        return e_1_seq, e_2_seq
 
     def evaluate(self, video_i, video_p, video_n):
         T = video_i.shape[1]
@@ -130,32 +131,53 @@ class CMCModel(nn.Module):
         video_p = torch.transpose(video_p, dim0=0, dim1=1)  # T x n x c x h x w
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
 
-        e_i1, e_i2 = self._encode(video_i)  # Tn x z
-        e_p1, e_p2 = self._encode(video_p)  # Tn x z
-        e_n1, e_n2 = self._encode(video_n)  # Tn x z
+        e_i1, e_i2 = self._encode(video_i)  # T x n x z
+        e_p1, e_p2 = self._encode(video_p)  # T x n x z
+        e_n1, e_n2 = self._encode(video_n)  # T x n x z
 
-        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=0)  # 3Tn x z
-        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=0)  # 3Tn x z
+        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=0).view(-1, self.hidden_dim)  # 3Tn x z
+        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=0).view(-1, self.hidden_dim)  # 3Tn x z
 
-        e_i_seq = torch.cat([e_i1, e_i2], dim=1).view(T, n, -1)  # T x n x 2z
-        e_p_seq = torch.cat([e_p1, e_p2], dim=1).view(T, n, -1)  # T x n x 2z
-        e_n_seq = torch.cat([e_n1, e_n2], dim=1).view(T, n, -1)  # T x n x 2z
+        e_i_seq = torch.cat([e_i1, e_i2], dim=2)  # T x n x 2z
+        e_p_seq = torch.cat([e_p1, e_p2], dim=2)  # T x n x 2z
+        e_n_seq = torch.cat([e_n1, e_n2], dim=2)  # T x n x 2z
 
-        h_i, hidden_i = self.lstm_enc(e_i_seq)
-        h_p, hidden_p = self.lstm_enc(e_p_seq)
-        h_n, hidden_n = self.lstm_enc(e_n_seq)
+        h_i_seq, hidden_i = self.lstm_enc(e_i_seq)  # T x n x z
+        h_p_seq, hidden_p = self.lstm_enc(e_p_seq)  # T x n x z
+        h_n_seq, hidden_n = self.lstm_enc(e_n_seq)  # T x n x z
 
-        l_sns = self.loss_sns(h_i, h_p, h_n)
+        h_seq = torch.cat([h_i_seq, h_p_seq, h_n_seq], dim=1)
+
+        t = np.random.randint(T)
+        context_width = 2
+
+        c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
+        c_list.remove(t)
+        nc_list = list(range(T))
+        for i in c_list:
+            nc_list.remove(i)
+
+        c_t = random.choice(c_list)
+        nc_t =random.choice(nc_list)
+
+        h_t = h_seq[t]
+        h_c_t = h_seq[c_t]
+        h_nc_t = h_seq[nc_t]
+
+        l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
         l_contrast = self._contrast_loss(torch.stack([e_1, e_2], dim=1))
+        l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
 
         loss = 0.
         loss += l_sns * 0.5
         loss += l_contrast * 0.5
+        loss += l_seq * 0.5
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_contrast': l_contrast.item(),
+            'l_seq': l_seq.item()
         }
 
         return metrics, loss
@@ -190,11 +212,8 @@ class LSTMEncoder(nn.Module):
         super(LSTMEncoder, self).__init__()
         self.num_layers = 2
         self.encoder = nn.LSTM(input_size=state_dim * 2, hidden_size=state_dim, num_layers=self.num_layers)
-        self.fc = nn.Linear(state_dim, state_dim)
 
     def forward(self, e_seq):
         h_seq, hidden = self.encoder(e_seq)
-        h = h_seq[-1]
-        h = self.fc(h)
-        return h, hidden
+        return h_seq, hidden
 
