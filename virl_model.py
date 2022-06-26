@@ -238,19 +238,19 @@ class DeconvNet(nn.Module):
         self.fc2 = nn.Conv2d(hidden_dim, hidden_dim * 4, kernel_size=1)
         self.fc1 = nn.Conv2d(hidden_dim * 4, 512, kernel_size=1)
         self.b_norm_fc_1 = nn.BatchNorm2d(512)
-        self.conn_4 = nn.Conv2d(512 * 2, 512, kernel_size=1, stride=1)
+        # self.conn_4 = nn.Conv2d(512 * 2, 512, kernel_size=1, stride=1)
 
         self.t_conv_4 = nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2)
         self.b_norm_4 = nn.BatchNorm2d(256)
-        self.conn_3 = nn.Conv2d(256 * 2, 256, kernel_size=1, stride=1)
+        # self.conn_3 = nn.Conv2d(256 * 2, 256, kernel_size=1, stride=1)
 
         self.t_conv_3 = nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2)
         self.b_norm_3 = nn.BatchNorm2d(128)
-        self.conn_2 = nn.Conv2d(128 * 2, 128, kernel_size=1, stride=1)
+        # self.conn_2 = nn.Conv2d(128 * 2, 128, kernel_size=1, stride=1)
 
         self.t_conv_2 = nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, output_padding=1)
         self.b_norm_2 = nn.BatchNorm2d(64)
-        self.conn_1 = nn.Conv2d(64 * 2, 64, kernel_size=1, stride=1)
+        # self.conn_1 = nn.Conv2d(64 * 2, 64, kernel_size=1, stride=1)
 
         self.t_conv_1 = nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
 
@@ -259,16 +259,16 @@ class DeconvNet(nn.Module):
         e = self.leaky_relu(self.fc2(e))
 
         d4 = self.leaky_relu(self.b_norm_fc_1(self.fc1(e)))
-        d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
+        # d4 = self.leaky_relu(self.conn_4(torch.cat([c4, d4], dim=1)))
 
         d3 = self.leaky_relu(self.b_norm_4(self.t_conv_4(d4)))
-        d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
+        # d3 = self.leaky_relu(self.conn_3(torch.cat([c3, d3], dim=1)))
 
         d2 = self.leaky_relu(self.b_norm_3(self.t_conv_3(d3)))
-        d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
+        # d2 = self.leaky_relu(self.conn_2(torch.cat([c2, d2], dim=1)))
 
         d1 = self.leaky_relu(self.b_norm_2(self.t_conv_2(d2)))
-        d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
+        # d1 = self.leaky_relu(self.conn_1(torch.cat([c1, d1], dim=1)))
 
         obs = self.leaky_relu(self.t_conv_1(d1))
         return obs
@@ -295,7 +295,7 @@ class LSTMDecoder(nn.Module):
         self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
 
     def forward(self, h, hidden, T):
-        # hidden = None
+        hidden = None
         e_seq = []
         for _ in range(T):
             h = h.unsqueeze(0)

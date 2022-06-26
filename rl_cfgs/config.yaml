@@ -39,6 +39,9 @@ state_dim: 128  # 1024
 
 use_ct: False
 
+
+use_frame_state: true
+
 agent:
   _target_: rl_model.RLAgent
   state_dim: ${state_dim}
