@@ -59,8 +59,8 @@ class ConvNet(nn.Module):
     def __init__(self, hidden_dim):
         super(ConvNet, self).__init__()
 
-        self.enc_l = HalfAlexNet(1, hidden_dim)
-        self.enc_ab = HalfAlexNet(2, hidden_dim)
+        self.enc_l = HalfAlexNet(1, hidden_dim // 2)
+        self.enc_ab = HalfAlexNet(2, hidden_dim // 2)
 
     def forward(self, x_l, x_ab):
         x_l = self.enc_l(x_l)
@@ -78,9 +78,11 @@ class CMCModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.conv = ConvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
+        self.lstm_dec = LSTMDecoder(hidden_dim)
 
         self.conv_opt = torch.optim.Adam(self.conv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
+        self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
 
@@ -114,8 +116,8 @@ class CMCModel(nn.Module):
             e_1, e_2 = self.conv(view_1, view_2)
             e_1_seq.append(e_1)
             e_2_seq.append(e_2)
-        e_1_seq = torch.stack(e_1_seq)  # T x n x z
-        e_2_seq = torch.stack(e_2_seq)  # T x n x z
+        e_1_seq = torch.stack(e_1_seq)  # T x n x z/2
+        e_2_seq = torch.stack(e_2_seq)  # T x n x z/2
         return e_1_seq, e_2_seq
 
     def evaluate(self, video_i, video_p, video_n):
@@ -126,54 +128,56 @@ class CMCModel(nn.Module):
         video_p = torch.transpose(video_p, dim0=0, dim1=1)  # T x n x c x h x w
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
 
-        e_i1, e_i2 = self._encode(video_i)  # T x n x z
-        e_p1, e_p2 = self._encode(video_p)  # T x n x z
-        e_n1, e_n2 = self._encode(video_n)  # T x n x z
+        e_i1, e_i2 = self._encode(video_i)  # T x n x z/2
+        e_p1, e_p2 = self._encode(video_p)  # T x n x z/2
+        e_n1, e_n2 = self._encode(video_n)  # T x n x z/2
 
-        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=1).view(-1, self.hidden_dim)  # 3Tn x z
-        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=1).view(-1, self.hidden_dim)  # 3Tn x z
+        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=1).view(-1, self.hidden_dim)  # 3Tn x z/2
+        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=1).view(-1, self.hidden_dim)  # 3Tn x z/2
 
-        e_i_seq = torch.cat([e_i1, e_i2], dim=2)  # T x n x 2z
-        e_p_seq = torch.cat([e_p1, e_p2], dim=2)  # T x n x 2z
-        e_n_seq = torch.cat([e_n1, e_n2], dim=2)  # T x n x 2z
+        e_i_seq = torch.cat([e_i1, e_i2], dim=2)  # T x n x z
+        e_p_seq = torch.cat([e_p1, e_p2], dim=2)  # T x n x z
+        e_n_seq = torch.cat([e_n1, e_n2], dim=2)  # T x n x z
 
         h_i_seq, hidden_i = self.lstm_enc(e_i_seq)  # T x n x z
         h_p_seq, hidden_p = self.lstm_enc(e_p_seq)  # T x n x z
         h_n_seq, hidden_n = self.lstm_enc(e_n_seq)  # T x n x z
 
-        h_seq = torch.cat([h_i_seq, h_p_seq, h_n_seq], dim=1)
+        e0_i_seq = self.lstm_dec(h_i_seq[-1], T)
+        e0_p_seq = self.lstm_dec(h_p_seq[-1], T)
 
+        h_seq = torch.cat([h_i_seq, h_p_seq, h_n_seq], dim=1)
         t = np.random.randint(T)
         context_width = 2
-
         c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
         c_list.remove(t)
         nc_list = list(range(T))
         nc_list.remove(t)
         for i in c_list:
             nc_list.remove(i)
-
         c_t = random.choice(c_list)
         nc_t = random.choice(nc_list)
-
         h_t = h_seq[t]
         h_c_t = h_seq[c_t]
         h_nc_t = h_seq[nc_t]
 
         l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
         l_contrast = self.contrast_loss(torch.stack([e_1, e_2], dim=1))
-        l_seq = -(torch.log(torch.sigmoid(torch.inner(h_t, h_c_t))) + torch.log(torch.sigmoid(torch.inner(h_t, -h_nc_t)))).mean()
+        l_sim = -(torch.log(torch.sigmoid(torch.inner(h_t, h_c_t))) + torch.log(torch.sigmoid(torch.inner(h_t, -h_nc_t)))).mean()
+        l_dec = F.mse_loss(e_i_seq.view(-1, self.hidden_dim), e0_i_seq.view(-1, self.hidden_dim)) + F.mse_loss(e_p_seq.view(-1, self.hidden_dim), e0_p_seq.view(-1, self.hidden_dim))
 
         loss = 0.
-        loss += l_sns * 0.8
+        loss += l_sns * 0.7
         loss += l_contrast * 0.1
-        loss += l_seq * 0.1
+        loss += l_sim * 0.1
+        loss += l_dec * 0.1
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_contrast': l_contrast.item(),
-            'l_seq': l_seq.item(),
+            'l_sim': l_sim.item(),
+            'l_dec': l_dec.item(),
             'context_sim': F.cosine_similarity(h_t, h_c_t).abs().mean().item(),
             'non_context_sim': F.cosine_similarity(h_t, h_nc_t).abs().mean().item()
         }
@@ -184,11 +188,13 @@ class CMCModel(nn.Module):
 
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
+        self.lstm_dec_opt.zero_grad()
 
         metrics, loss = self.evaluate(video_i, video_p, video_n)
 
         loss.backward()
 
+        self.lstm_dec_opt.step()
         self.lstm_enc_opt.step()
         self.conv_opt.step()
 
@@ -209,9 +215,27 @@ class LSTMEncoder(nn.Module):
     def __init__(self, state_dim):
         super(LSTMEncoder, self).__init__()
         self.num_layers = 2
-        self.encoder = nn.LSTM(input_size=state_dim * 2, hidden_size=state_dim, num_layers=self.num_layers)
+        self.encoder = nn.LSTM(input_size=state_dim, hidden_size=state_dim, num_layers=self.num_layers)
 
     def forward(self, e_seq):
         h_seq, hidden = self.encoder(e_seq)
         return h_seq, hidden
+
+
+class LSTMDecoder(nn.Module):
+    def __init__(self, state_dim):
+        super(LSTMDecoder, self).__init__()
+        self.num_layers = 2
+        self.decoder = nn.LSTM(input_size=state_dim, hidden_size=state_dim, num_layers=self.num_layers)
+
+    def forward(self, h, T):
+        hidden = None
+        e_seq = []
+        for _ in range(T):
+            h = h.unsqueeze(0)
+            h, hidden = self.decoder(h, hidden)
+            h = h.squeeze(0)
+            e_seq.append(h)
+        e_seq = torch.stack(e_seq)
+        return e_seq
 
