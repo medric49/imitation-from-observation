@@ -41,8 +41,7 @@ class HalfAlexNet(nn.Module):
         )
         self.fc = nn.Sequential(
             nn.Linear(96 * 7 * 7, state_dim),
-            nn.BatchNorm1d(2048),
-            nn.ReLU(inplace=True),
+            nn.Sigmoid(),
         )
 
     def forward(self, x):
@@ -83,11 +82,7 @@ class CMCModel(nn.Module):
         self.conv_opt = torch.optim.Adam(self.conv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
 
-        self._contrast_loss = SupConLoss(
-            contrast_mode='all',
-            temperature=0.05,
-            base_temperature=0.05
-        )
+        self.contrast_loss = SupConLoss()
 
     def encode(self, video):
         e_seq = self.encode_frame(video)
@@ -135,8 +130,8 @@ class CMCModel(nn.Module):
         e_p1, e_p2 = self._encode(video_p)  # T x n x z
         e_n1, e_n2 = self._encode(video_n)  # T x n x z
 
-        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=0).view(-1, self.hidden_dim)  # 3Tn x z
-        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=0).view(-1, self.hidden_dim)  # 3Tn x z
+        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=1).view(-1, self.hidden_dim)  # 3Tn x z
+        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=1).view(-1, self.hidden_dim)  # 3Tn x z
 
         e_i_seq = torch.cat([e_i1, e_i2], dim=2)  # T x n x 2z
         e_p_seq = torch.cat([e_p1, e_p2], dim=2)  # T x n x 2z
@@ -154,30 +149,33 @@ class CMCModel(nn.Module):
         c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
         c_list.remove(t)
         nc_list = list(range(T))
+        nc_list.remove(t)
         for i in c_list:
             nc_list.remove(i)
 
         c_t = random.choice(c_list)
-        nc_t =random.choice(nc_list)
+        nc_t = random.choice(nc_list)
 
         h_t = h_seq[t]
         h_c_t = h_seq[c_t]
         h_nc_t = h_seq[nc_t]
 
         l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
-        l_contrast = self._contrast_loss(torch.stack([e_1, e_2], dim=1))
-        l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
+        l_contrast = self.contrast_loss(torch.stack([e_1, e_2], dim=1))
+        l_seq = -(torch.log(torch.sigmoid(torch.inner(h_t, h_c_t))) + torch.log(torch.sigmoid(torch.inner(h_t, -h_nc_t)))).mean()
 
         loss = 0.
-        loss += l_sns * 0.5
-        loss += l_contrast * 0.5
-        loss += l_seq * 0.5
+        loss += l_sns * 0.8
+        loss += l_contrast * 0.1
+        loss += l_seq * 0.1
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_contrast': l_contrast.item(),
-            'l_seq': l_seq.item()
+            'l_seq': l_seq.item(),
+            'context_sim': F.cosine_similarity(h_t, h_c_t).abs().mean().item(),
+            'non_context_sim': F.cosine_similarity(h_t, h_nc_t).abs().mean().item()
         }
 
         return metrics, loss

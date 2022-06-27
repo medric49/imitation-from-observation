@@ -5,9 +5,9 @@ defaults:
 seed: 1
 
 num_epochs: 16001
-eval_every_epochs: 20
+eval_every_epochs: 60
 num_evaluations: 5
-batch_size: 32
+batch_size: 8
 episode_len: 30
 num_workers: 4
 
