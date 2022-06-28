@@ -27,7 +27,6 @@ virl_model:
 
 
 
-exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
 
 hydra:
