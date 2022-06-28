@@ -1,8 +1,10 @@
+import random
 from pathlib import Path
 
 import torch
 from torch import nn
 from torch.nn import functional as F
+from losses import SupConLoss
 
 
 class ViRLNet(nn.Module):
@@ -11,6 +13,7 @@ class ViRLNet(nn.Module):
         super().__init__()
 
         self.rho = rho
+        self.hidden_dim = hidden_dim
 
         self.lambda_1 = lambda_1
         self.lambda_2 = lambda_2
@@ -26,6 +29,8 @@ class ViRLNet(nn.Module):
         self.deconv_opt = torch.optim.Adam(self.deconv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
         self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
+
+        self.contrast_loss = SupConLoss()
 
     def encode(self, video):
         video = video.unsqueeze(0)  # 1 x T x c x h x w
@@ -120,29 +125,47 @@ class ViRLNet(nn.Module):
         video_p = torch.transpose(video_p, dim0=0, dim1=1)  # T x n x c x h x w
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
 
-        e_seq_i, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i = self._encode(video_i)
-        e_seq_p, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p = self._encode(video_p)
-        e_seq_n, c1_seq_n, c2_seq_n, c3_seq_n, c4_seq_n = self._encode(video_n)
+        e_i_seq, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i = self._encode(video_i)
+        e_p_seq, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p = self._encode(video_p)
+        e_n_seq, c1_seq_n, c2_seq_n, c3_seq_n, c4_seq_n = self._encode(video_n)
 
-        h_i, hidden_i = self.lstm_enc(e_seq_i)
-        h_p, hidden_p = self.lstm_enc(e_seq_p)
-        h_n, hidden_n = self.lstm_enc(e_seq_n)
+        h_i, hidden_i = self.lstm_enc(e_i_seq)
+        h_p, hidden_p = self.lstm_enc(e_p_seq)
+        h_n, hidden_n = self.lstm_enc(e_n_seq)
 
-        e0_seq_i = self.lstm_dec(h_i, hidden_i, T)
-        e0_seq_p = self.lstm_dec(h_p, hidden_p, T)
+        e0_i_seq = self.lstm_dec(h_i, hidden_i, T)
+        e0_p_seq = self.lstm_dec(h_p, hidden_p, T)
 
-        video0_i = self._decode(e0_seq_i, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i)
-        video0_p = self._decode(e0_seq_p, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p)
+        video0_i = self._decode(e0_i_seq, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i)
+        video0_p = self._decode(e0_p_seq, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p)
 
-        video1_i = self._decode(e_seq_i, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i)
-        video1_p = self._decode(e_seq_p, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p)
+        video1_i = self._decode(e_i_seq, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i)
+        video1_p = self._decode(e_p_seq, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p)
+
+        t = random.randint(0, T-1)
+        context_width = 2
+        c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
+        c_list.remove(t)
+        nc_list = list(range(T))
+        nc_list.remove(t)
+        for i in c_list:
+            nc_list.remove(i)
+        c_t = random.choice(c_list)
+        nc_t = random.choice(nc_list)
+        e_seq = torch.cat([e_i_seq, e_p_seq, e_n_seq], dim=1)  # T x 3n x z
+        e_t = e_seq[t]
+        e_c_t = e_seq[c_t]
+        e_nc_t = e_seq[nc_t]
 
         l_sns = self.loss_sns(h_i, h_p, h_n)
-        l_sni = self.loss_sni(e_seq_i, e_seq_p, e_seq_n)
+        # l_sni = self.loss_sni(e_i_seq, e_p_seq, e_n_seq)
+        l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+        # l_sni = self.loss_sni(e_t, e_c_t, e_nc_t)
+        # l_sni = -(torch.log(torch.sigmoid(torch.inner(e_t, e_c_t))) + torch.log(torch.sigmoid(torch.inner(e_t, -e_nc_t)))).mean()
         l_raes = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
         l_vaei = self.loss_vae(video_i, video1_i) + self.loss_vae(video_p, video1_p)
         loss = self.lambda_1 * l_sns
-        # loss += self.lambda_2 * l_sni
+        loss += self.lambda_2 * l_sni
         loss += self.lambda_3 * l_raes
         loss += self.lambda_4 * l_vaei
 
@@ -207,6 +230,7 @@ class ConvNet(nn.Module):
     def __init__(self, hidden_dim):
         super(ConvNet, self).__init__()
         self.leaky_relu = nn.LeakyReLU()
+        self.sigmoid = nn.Sigmoid()
         self.conv_1 = nn.Conv2d(3, 64, kernel_size=5, stride=2)
         self.b_norm_1 = nn.BatchNorm2d(64)
         self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
@@ -225,7 +249,7 @@ class ConvNet(nn.Module):
         c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
         c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.leaky_relu(self.fc2(e))
+        e = self.sigmoid(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
         return e, c1, c2, c3, c4
 

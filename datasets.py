@@ -96,7 +96,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
             cam1, cam2, cam3 = 0, 0, 0
 
         classes = list(range(self._num_classes))
-        class_1 = classes[0]
+        class_1 = random.choice(classes)
         classes.remove(class_1)
         class_2 = random.choice(classes)
 
