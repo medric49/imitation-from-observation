@@ -1,4 +1,7 @@
 import warnings
+
+import metaworld_env
+
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 import torch
@@ -56,10 +59,18 @@ class Workspace:
         # create logger
         self.logger = Logger(self.work_dir, use_tb=self.cfg.use_tb)
         # create envs
-        self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                  self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
-        self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
-                                 self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+        if not self.cfg.get('meta_world', None):
+            self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
+                                      self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+            self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
+                                     self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None))
+        else:
+            self.train_env = metaworld_env.Env(env_name=self.cfg.task_name)
+            self.eval_env = metaworld_env.Env(env_name=self.cfg.task_name)
+
+            self.train_env = dmc.wrap(self.train_env, self.cfg.frame_stack, self.cfg.action_repeat)
+            self.eval_env = dmc.wrap(self.eval_env, self.cfg.frame_stack, self.cfg.action_repeat)
+
         # create replay buffer
         data_specs = (self.train_env.observation_spec(),
                       self.train_env.action_spec(),
