@@ -13,9 +13,7 @@ class Env(dm_env.Environment):
         self._observation = None
         env_set = metaworld.MT10()
         self._env = env_set.train_classes[env_name]()
-        tasks = [task for task in env_set.train_tasks if task.env_name == env_name]
-        task = random.choice(tasks)
-        self._env.set_task(task)
+        self._tasks = [task for task in env_set.train_tasks if task.env_name == env_name]
         self.im_width = im_width
         self.im_height = im_height
 
@@ -23,6 +21,7 @@ class Env(dm_env.Environment):
         self._pixels_key = 'pixels'
 
     def reset(self) -> TimeStep:
+        self._env.set_task(random.choice(self._tasks))
         _ = self._env.reset()
         self.step_id = 0
 
