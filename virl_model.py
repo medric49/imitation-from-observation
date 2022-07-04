@@ -38,14 +38,14 @@ class ViRLNet(nn.Module):
         video = torch.transpose(video, dim0=0, dim1=1)  # T x 1 x c x h x w
         e_seq, _, _, _, _ = self._encode(video)
         h, _ = self.lstm_enc(e_seq)  # 1 x h
-        h = h[0]
+        h = h[-1][0]
         return h
 
     def encode_state_seq(self, e_seq):
         e_seq = e_seq.unsqueeze(0)  # 1 x T x z
         e_seq = torch.transpose(e_seq, dim0=0, dim1=1)  # T x 1 x z
         h, _ = self.lstm_enc(e_seq)  # 1 x h
-        h = h[0]
+        h = h[-1][0]
         return h
 
     def encode_frame(self, image):
@@ -129,12 +129,12 @@ class ViRLNet(nn.Module):
         e_p_seq, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p = self._encode(video_p)
         e_n_seq, c1_seq_n, c2_seq_n, c3_seq_n, c4_seq_n = self._encode(video_n)
 
-        h_i, hidden_i = self.lstm_enc(e_i_seq)
-        h_p, hidden_p = self.lstm_enc(e_p_seq)
-        h_n, hidden_n = self.lstm_enc(e_n_seq)
+        h_i_seq, hidden_i = self.lstm_enc(e_i_seq)
+        h_p_seq, hidden_p = self.lstm_enc(e_p_seq)
+        h_n_seq, hidden_n = self.lstm_enc(e_n_seq)
 
-        e0_i_seq = self.lstm_dec(h_i, hidden_i, T)
-        e0_p_seq = self.lstm_dec(h_p, hidden_p, T)
+        e0_i_seq = self.lstm_dec(h_i_seq, hidden_i, T)
+        e0_p_seq = self.lstm_dec(h_p_seq, hidden_p, T)
 
         video0_i = self._decode(e0_i_seq, c1_seq_i, c2_seq_i, c3_seq_i, c4_seq_i)
         video0_p = self._decode(e0_p_seq, c1_seq_p, c2_seq_p, c3_seq_p, c4_seq_p)
@@ -155,24 +155,29 @@ class ViRLNet(nn.Module):
         e_seq = torch.cat([e_i_seq, e_p_seq, e_n_seq], dim=1)  # T x 3n x z
         e_t = e_seq[t]
         e_c_t = e_seq[c_t]
-        e_nc_t = e_seq[nc_t]
+        # h_seq = torch.cat([h_i_seq, h_p_seq, h_n_seq], dim=1)  # T x 3n x z
+        # h_t = h_seq[t]
+        # h_c_t = h_seq[c_t]
 
-        l_sns = self.loss_sns(h_i, h_p, h_n)
+        l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
         # l_sni = self.loss_sni(e_i_seq, e_p_seq, e_n_seq)
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         # l_sni = self.loss_sni(e_t, e_c_t, e_nc_t)
         # l_sni = -(torch.log(torch.sigmoid(torch.inner(e_t, e_c_t))) + torch.log(torch.sigmoid(torch.inner(e_t, -e_nc_t)))).mean()
+        # l_sim_seq = self.contrast_loss(torch.stack([h_t, h_c_t], dim=1))
         l_raes = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
         l_vaei = self.loss_vae(video_i, video1_i) + self.loss_vae(video_p, video1_p)
-        loss = self.lambda_1 * l_sns
-        loss += self.lambda_2 * l_sni
-        loss += self.lambda_3 * l_raes
-        loss += self.lambda_4 * l_vaei
+        loss = 0.7 * l_sns
+        loss += 0.1 * l_sni
+        # loss += 0.1 * l_sim_seq
+        loss += 0.1 * l_raes
+        loss += 0.1 * l_vaei
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_sni': l_sni.item(),
+            # 'l_sim_seq': l_sim_seq.item(),
             'l_raes': l_raes.item(),
             'l_vaei': l_vaei.item()
         }
@@ -304,12 +309,13 @@ class LSTMEncoder(nn.Module):
         self.num_layers = 2
         self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
         self.fc = nn.Linear(input_size, input_size)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
+        T = e_seq.shape[0]
         h_seq, hidden = self.encoder(e_seq)
-        h = h_seq[-1]
-        h = self.fc(h)
-        return h, hidden
+        h_seq = torch.stack([self.sigmoid(self.fc(h_seq[i])) for i in range(T)])
+        return h_seq, hidden
 
 
 class LSTMDecoder(nn.Module):
@@ -318,14 +324,15 @@ class LSTMDecoder(nn.Module):
         self.num_layers = 2
         self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
 
-    def forward(self, h, hidden, T):
-        hidden = None
-        e_seq = []
-        for _ in range(T):
-            h = h.unsqueeze(0)
-            h, hidden = self.decoder(h, hidden)
-            h = h.squeeze(0)
-            e_seq.append(h)
-
-        e_seq = torch.stack(e_seq)
-        return e_seq
+    def forward(self, h_seq, hidden, T):
+        # hidden = None
+        # h = h_seq[-1]
+        # e_seq = []
+        # for _ in range(T):
+        #     h = h.unsqueeze(0)
+        #     h, hidden = self.decoder(h, hidden)
+        #     h = h.squeeze(0)
+        #     e_seq.append(h)
+        # e_seq = torch.stack(e_seq)
+        # return e_seq
+        return self.decoder(h_seq)[0]

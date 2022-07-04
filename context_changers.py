@@ -118,9 +118,11 @@ class WalkerRunContextChanger(ContextChanger):
         self.floor = np.random.uniform([0., 0., 0., 1.], [0.5, 0.5, 0.5, 1])
 
     def change_env(self, env):
-        env.physics.named.model.mat_texid['grid'] = -1
-        env.physics.named.model.geom_rgba['floor'] = self.floor
+        pass
+        # env.physics.named.model.mat_texid['grid'] = -1
+        # env.physics.named.model.geom_rgba['floor'] = self.floor
 
     def reset_env(self, env):
-        env.physics.named.model.mat_texid['grid'] = 1
-        env.physics.named.model.geom_rgba['floor'] = [0.5, 0.5, 0.5, 1]
+        pass
+        # env.physics.named.model.mat_texid['grid'] = 1
+        # env.physics.named.model.geom_rgba['floor'] = [0.5, 0.5, 0.5, 1]
