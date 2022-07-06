@@ -17,6 +17,18 @@ class ContextChanger:
         raise NotImplementedError
 
 
+class NullContextChanger(ContextChanger):
+
+    def reset(self):
+        pass
+
+    def reset_env(self, env):
+        pass
+
+    def change_env(self, env):
+        pass
+
+
 class ReacherHardContextChanger(ContextChanger):
     def __init__(self, multi_reset=True):
         self.multi_reset = multi_reset

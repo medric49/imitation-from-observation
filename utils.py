@@ -150,13 +150,11 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=None):
+def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=None, im_w=64, im_h=64):
     root_dir = Path(root_dir)
     root_dir.mkdir(parents=True, exist_ok=True)
 
     expert.train(training=False)
-
-    im_w, im_h = 64, 64
 
     def act(time_step):
         action = expert.act(time_step.observation, 1, eval_mode=True)
