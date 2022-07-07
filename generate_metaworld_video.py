@@ -37,6 +37,7 @@ if __name__ == '__main__':
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     env = metaworld_env.Env(args.env_name)
+    env = dmc.wrap(env, frame_stack=1, action_repeat=1)
     expert = metaworld_env.Expert(policies[args.env_name](), env)
     agent = RandomAgent(env)
 

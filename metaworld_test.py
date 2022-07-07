@@ -3,12 +3,14 @@ import time
 import cv2
 from metaworld.policies import SawyerWindowCloseV2Policy
 
+import dmc
 import metaworld_env
 
 os.environ['MKL_SERVICE_FORCE_INTEL'] = '1'
 os.environ['MUJOCO_GL'] = 'egl'
 
 env = metaworld_env.Env('window-close-v2')
+env = dmc.wrap(env, frame_stack=1, action_repeat=1)
 expert = metaworld_env.Expert(SawyerWindowCloseV2Policy(), env)
 
 time_step = env.reset()
