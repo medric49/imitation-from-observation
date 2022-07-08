@@ -75,11 +75,12 @@ class ActionRepeatWrapper(dm_env.Environment):
 
 
 class FrameStackWrapper(dm_env.Environment):
-    def __init__(self, env, num_frames, pixels_key='pixels'):
+    def __init__(self, env, num_frames, pixels_key='pixels', to_lab=False):
         self._env = env
         self._num_frames = num_frames
         self._frames = deque([], maxlen=num_frames)
         self._pixels_key = pixels_key
+        self.to_lab = to_lab
 
         wrapped_obs_spec = env.observation_spec()
         assert pixels_key in wrapped_obs_spec
@@ -88,12 +89,19 @@ class FrameStackWrapper(dm_env.Environment):
         # remove batch dim
         if len(pixels_shape) == 4:
             pixels_shape = pixels_shape[1:]
-        self._obs_spec = specs.BoundedArray(shape=np.concatenate(
-            [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
-                                            dtype=np.uint8,
-                                            minimum=0,
-                                            maximum=255,
-                                            name='observation')
+
+        if not self.to_lab:
+            self._obs_spec = specs.BoundedArray(shape=np.concatenate(
+                [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
+                                                dtype=np.uint8,
+                                                minimum=0,
+                                                maximum=255,
+                                                name='observation')
+        else:
+            self._obs_spec = specs.Array(shape=np.concatenate(
+                [[pixels_shape[2] * num_frames], pixels_shape[:2]], axis=0),
+                dtype=np.float,
+                name='observation')
 
     def _transform_observation(self, time_step):
         assert len(self._frames) == self._num_frames
@@ -105,6 +113,9 @@ class FrameStackWrapper(dm_env.Environment):
         # remove batch dim
         if len(pixels.shape) == 4:
             pixels = pixels[0]
+
+        if self.to_lab:
+            pixels = utils.rgb_to_lab(pixels)
         return pixels.transpose(2, 0, 1).copy()
 
     def reset(self):
@@ -648,7 +659,7 @@ class EpisodeLenWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer: context_changers.ContextChanger = None, episode_len=None):
+def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, im_w=84, im_h=84, context_changer: context_changers.ContextChanger = None, episode_len=None, to_lab=False):
     domain, task = name.split('_', 1)
     # overwrite cup to ball_in_cup
     domain = dict(cup='ball_in_cup').get(domain, domain)
@@ -683,18 +694,18 @@ def make(name, frame_stack, action_repeat, seed, xml_path=None, camera_id=None, 
         if context_changer is not None:
             env = ChangeContextWrapper(env, context_changer, camera_id, im_h, im_w, pixels_key)
     # stack several frames
-    env = FrameStackWrapper(env, frame_stack, pixels_key)
+    env = FrameStackWrapper(env, frame_stack, pixels_key, to_lab)
     env = ExtendedTimeStepWrapper(env)
     if episode_len is not None:
         env = EpisodeLenWrapper(env, episode_len)
     return env
 
 
-def wrap(env, frame_stack, action_repeat, episode_len=None):
+def wrap(env, frame_stack, action_repeat, episode_len=None, to_lab=False):
     env = ActionDTypeWrapper(env, np.float32)
     env = ActionRepeatWrapper(env, action_repeat)
     env = action_scale.Wrapper(env, minimum=-1.0, maximum=+1.0)
-    env = FrameStackWrapper(env, frame_stack, 'pixels')
+    env = FrameStackWrapper(env, frame_stack, 'pixels', to_lab)
     env = ExtendedTimeStepWrapper(env)
     if episode_len is not None:
         env = EpisodeLenWrapper(env, episode_len)
