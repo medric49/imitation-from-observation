@@ -33,7 +33,7 @@ class HalfConvNet(nn.Module):
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
         e = self.sigmoid(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
-        return e, c1, c2, c3, c4
+        return e
 
 
 class ConvNet(nn.Module):
