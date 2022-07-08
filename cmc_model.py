@@ -8,9 +8,9 @@ from torch.nn import functional as F
 from losses import SupConLoss
 
 
-class ConvNet(nn.Module):
+class HalfConvNet(nn.Module):
     def __init__(self, in_channel, hidden_dim):
-        super(ConvNet, self).__init__()
+        super(HalfConvNet, self).__init__()
         self.leaky_relu = nn.LeakyReLU()
         self.sigmoid = nn.Sigmoid()
         self.conv_1 = nn.Conv2d(in_channel, 64, kernel_size=5, stride=2)
@@ -40,8 +40,8 @@ class ConvNet(nn.Module):
     def __init__(self, hidden_dim):
         super(ConvNet, self).__init__()
 
-        self.enc_l = HalfAlexNet(1, hidden_dim // 2)
-        self.enc_ab = HalfAlexNet(2, hidden_dim // 2)
+        self.enc_l = HalfConvNet(1, hidden_dim // 2)
+        self.enc_ab = HalfConvNet(2, hidden_dim // 2)
 
     def forward(self, x_l, x_ab):
         x_l = self.enc_l(x_l)
