@@ -142,7 +142,7 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class ViRLEncoderStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False, use_frame_state=True):
+    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, use_target_state=False, use_frame_state=True, to_lab=False):
 
         self._env = env
 
@@ -163,6 +163,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.dist_reward = dist_reward
         self.use_target_state = use_target_state
         self.use_frame_state = use_frame_state
+        self.to_lab = to_lab
 
         self.expert_states = None
         self.agent_states = None
@@ -179,12 +180,18 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             time_step = self.expert_env.reset()
             episode = []
             with utils.change_context(self.expert_env, self.context_changer):
-                episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+                frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
+                if self.to_lab:
+                    frame = utils.rgb_to_lab(frame)
+                episode.append(frame)
             while not time_step.last():
                 action = self.expert.act(time_step.observation, 1, eval_mode=True)
                 time_step = self.expert_env.step(action)
                 with utils.change_context(self.expert_env, self.context_changer):
-                    episode.append(self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id))
+                    frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
+                    if self.to_lab:
+                        frame = utils.rgb_to_lab(frame)
+                    episode.append(frame)
 
             episode = np.array(episode)
             episode = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)

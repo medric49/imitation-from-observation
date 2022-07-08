@@ -13,5 +13,7 @@ xml_path: domain_xmls/reacher.xml
 context_camera_ids: [0]
 learner_camera_id: 0
 
+exp_group: reacher_hard
+
 context_changer:
   _target_: context_changers.ReacherHardContextChanger
