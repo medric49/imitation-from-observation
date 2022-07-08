@@ -8,51 +8,32 @@ from torch.nn import functional as F
 from losses import SupConLoss
 
 
-class HalfAlexNet(nn.Module):
-    def __init__(self, in_channel, state_dim):
-        super(HalfAlexNet, self).__init__()
-        self.conv_block_1 = nn.Sequential(
-            nn.Conv2d(in_channel, 48, 3, 1, 1, bias=False),  # 64 -> 64
-            nn.BatchNorm2d(48),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, 2),  # 64 -> 31
-        )
-        self.conv_block_2 = nn.Sequential(
-            nn.Conv2d(48, 96, 3, 1, 1, bias=False),  # 31 -> 31
-            nn.BatchNorm2d(96),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, 2),  # 31 -> 15
-        )
-        self.conv_block_3 = nn.Sequential(
-            nn.Conv2d(96, 192, 3, 1, 1, bias=False),  # 15 -> 15
-            nn.BatchNorm2d(192),
-            nn.ReLU(inplace=True),
-        )
-        self.conv_block_4 = nn.Sequential(
-            nn.Conv2d(192, 192, 3, 1, 1, bias=False),  # 15 -> 15
-            nn.BatchNorm2d(192),
-            nn.ReLU(inplace=True),
-        )
-        self.conv_block_5 = nn.Sequential(
-            nn.Conv2d(192, 96, 3, 1, 1, bias=False),  # 15 -> 15
-            nn.BatchNorm2d(96),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(3, 2),  # 15 ->  7
-        )
-        self.fc = nn.Sequential(
-            nn.Linear(96 * 7 * 7, state_dim),
-            nn.Sigmoid(),
-        )
+class ConvNet(nn.Module):
+    def __init__(self, in_channel, hidden_dim):
+        super(ConvNet, self).__init__()
+        self.leaky_relu = nn.LeakyReLU()
+        self.sigmoid = nn.Sigmoid()
+        self.conv_1 = nn.Conv2d(in_channel, 64, kernel_size=5, stride=2)
+        self.b_norm_1 = nn.BatchNorm2d(64)
+        self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
+        self.b_norm_2 = nn.BatchNorm2d(128)
+        self.conv_3 = nn.Conv2d(128, 256, kernel_size=5, stride=2)
+        self.b_norm_3 = nn.BatchNorm2d(256)
+        self.conv_4 = nn.Conv2d(256, 512, kernel_size=5, stride=2)
+        self.b_norm_4 = nn.BatchNorm2d(512)
+        self.fc1 = nn.Conv2d(512, hidden_dim * 4, kernel_size=1)
+        self.b_norm_fc_1 = nn.BatchNorm2d(hidden_dim * 4)
+        self.fc2 = nn.Conv2d(hidden_dim * 4, hidden_dim, kernel_size=1)
 
-    def forward(self, x):
-        x = self.conv_block_1(x)
-        x = self.conv_block_2(x)
-        x = self.conv_block_3(x)
-        x = self.conv_block_4(x)
-        x = self.conv_block_5(x)
-        x = torch.flatten(x, start_dim=1)
-        x = self.fc(x)
-        return x
+    def forward(self, obs):
+        c1 = self.leaky_relu(self.b_norm_1(self.conv_1(obs)))
+        c2 = self.leaky_relu(self.b_norm_2(self.conv_2(c1)))
+        c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
+        c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
+        e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
+        e = self.sigmoid(self.fc2(e))
+        e = e.view(e.shape[0], e.shape[1])
+        return e, c1, c2, c3, c4
 
 
 class ConvNet(nn.Module):
@@ -78,11 +59,9 @@ class CMCModel(nn.Module):
         self.hidden_dim = hidden_dim
         self.conv = ConvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
-        self.lstm_dec = LSTMDecoder(hidden_dim)
 
         self.conv_opt = torch.optim.Adam(self.conv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
-        self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
 
@@ -143,9 +122,6 @@ class CMCModel(nn.Module):
         h_p_seq, hidden_p = self.lstm_enc(e_p_seq)  # T x n x z
         h_n_seq, hidden_n = self.lstm_enc(e_n_seq)  # T x n x z
 
-        e0_i_seq = self.lstm_dec(h_i_seq[-1], T)
-        e0_p_seq = self.lstm_dec(h_p_seq[-1], T)
-
         t = random.randint(0, T-1)
         context_width = 2
         c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
@@ -165,20 +141,17 @@ class CMCModel(nn.Module):
         l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
         l_contrast = self.contrast_loss(torch.stack([e_1, e_2], dim=1))
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
-        l_dec = F.mse_loss(e_i_seq.view(-1, self.hidden_dim), e0_i_seq.view(-1, self.hidden_dim)) + F.mse_loss(e_p_seq.view(-1, self.hidden_dim), e0_p_seq.view(-1, self.hidden_dim))
 
         loss = 0.
         loss += l_sns * 0.7
-        loss += l_contrast * 0.1
-        loss += l_sni * 0.1
-        loss += l_dec * 0.1
+        loss += l_contrast * 0.15
+        loss += l_sni * 0.15
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_contrast': l_contrast.item(),
             'l_sin': l_sni.item(),
-            'l_dec': l_dec.item(),
             'context_sim': F.cosine_similarity(e_t, e_c_t).abs().mean().item(),
             'non_context_sim': F.cosine_similarity(e_t, e_nc_t).abs().mean().item()
         }
@@ -189,13 +162,11 @@ class CMCModel(nn.Module):
 
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
-        self.lstm_dec_opt.zero_grad()
 
         metrics, loss = self.evaluate(video_i, video_p, video_n)
 
         loss.backward()
 
-        self.lstm_dec_opt.step()
         self.lstm_enc_opt.step()
         self.conv_opt.step()
 
@@ -213,29 +184,15 @@ class CMCModel(nn.Module):
 
 
 class LSTMEncoder(nn.Module):
-    def __init__(self, state_dim):
+    def __init__(self, input_size):
         super(LSTMEncoder, self).__init__()
         self.num_layers = 2
-        self.encoder = nn.LSTM(input_size=state_dim, hidden_size=state_dim, num_layers=self.num_layers)
+        self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
+        self.fc = nn.Linear(input_size, input_size)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
+        T = e_seq.shape[0]
         h_seq, hidden = self.encoder(e_seq)
+        h_seq = torch.stack([self.sigmoid(self.fc(h_seq[i])) for i in range(T)])
         return h_seq, hidden
-
-
-class LSTMDecoder(nn.Module):
-    def __init__(self, state_dim):
-        super(LSTMDecoder, self).__init__()
-        self.num_layers = 2
-        self.decoder = nn.LSTM(input_size=state_dim, hidden_size=state_dim, num_layers=self.num_layers)
-
-    def forward(self, h, T):
-        hidden = None
-        e_seq = []
-        for _ in range(T):
-            h = h.unsqueeze(0)
-            h, hidden = self.decoder(h, hidden)
-            h = h.squeeze(0)
-            e_seq.append(h)
-        e_seq = torch.stack(e_seq)
-        return e_seq
