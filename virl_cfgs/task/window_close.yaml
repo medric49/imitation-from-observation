@@ -1,0 +1,5 @@
+train_video_dir: 'videos/window_close/train'
+valid_video_dir: 'videos/window_close/valid'
+train_cams: [0]
+
+exp_group: 'window_close'

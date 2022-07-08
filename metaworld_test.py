@@ -21,6 +21,5 @@ for i in range(env.max_path_length):
 
     a = expert.act(time_step.observation)
     time_step = env.step(a)
-    print(time_step.reward)
     time.sleep(1/25.)
 
