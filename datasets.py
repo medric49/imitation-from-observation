@@ -186,3 +186,79 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     def __iter__(self) -> Iterator[T_co]:
         while True:
             yield self._sample()
+
+
+class CMCVideoDataset(torch.utils.data.IterableDataset):
+
+    def __init__(self, root, episode_len, cam_ids, batch_size, to_lab=False):
+        self._root = Path(root)
+        self._num_classes = len(list(self._root.iterdir()))
+        self._files = []
+
+        for c in range(self._num_classes):
+            class_dir = self._root / str(c)
+            self._files.append(list(class_dir.iterdir()))
+
+        self._episode_len = episode_len
+        self._cam_ids = cam_ids
+        self.to_lab = to_lab
+
+        self.batch_size = batch_size
+        self.batch_item = 0
+
+        self.class_1 = None
+        self.class_2 = None
+
+    def _sample(self):
+        if len(self._cam_ids) > 1:
+            cam1, cam2, cam3 = random.sample(self._cam_ids, k=3)
+        else:
+            cam1, cam2, cam3 = 0, 0, 0
+
+        if self.batch_item == 0:
+            classes = list(range(self._num_classes))
+            self.class_1 = random.choice(classes)
+            classes.remove(self.class_1)
+            self.class_2 = random.choice(classes)
+
+        if self.batch_item in [0, 1]:
+            item_class = self.class_1
+        else:
+            item_class = self.class_2
+
+        video = random.choice(self._files[item_class])
+        video = np.load(video)[cam1, :self._episode_len]
+
+        if self.to_lab:
+            video = self.rgb_to_lab(video)
+
+        video = video.transpose(0, 3, 1, 2).copy()
+
+        self.batch_item = (self.batch_item + 1) % self.batch_size
+
+        return video, item_class
+
+    def rgb_to_lab(self, video):
+        T = video.shape[0]
+        return np.array([utils.rgb_to_lab(video[t]) for t in range(T)])
+
+    @staticmethod
+    def augment(video: torch.Tensor):
+        video = ViRLVideoDataset.random_sequence_cropping(video)
+        return video
+
+    @staticmethod
+    def random_sequence_cropping(video: torch.Tensor):
+        T = video.shape[1]
+        # base = sum(list(range(T)))
+        # p_list = [(T - i)/base for i in range(T)]
+        p_list = [1./10 for i in range(T)]
+
+        indices = [i for i in range(T) if np.random.rand() > p_list[i]]
+        video = video[:, indices, :, :, :]
+
+        return video
+
+    def __iter__(self) -> Iterator[T_co]:
+        while True:
+            yield self._sample()

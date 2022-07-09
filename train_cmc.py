@@ -1,3 +1,4 @@
+import sys
 import warnings
 
 import cmc_model
@@ -16,7 +17,6 @@ from hydra.utils import to_absolute_path
 
 import datasets
 import utils
-import video
 from logger import Logger
 
 
@@ -41,8 +41,8 @@ class Workspace:
         utils.set_seed_everywhere(cfg.seed)
         self.encoder: cmc_model.CMCModel = hydra.utils.instantiate(self.cfg.cmc_model).to(utils.device())
 
-        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, to_lab=True)
-        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, to_lab=True)
+        self.dataset = datasets.CMCVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.batch_size, to_lab=True)
+        self.valid_dataset = datasets.CMCVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.batch_size, to_lab=True)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -70,13 +70,11 @@ class Workspace:
         self.encoder.train()
 
         while train_until_epoch(self._epoch):
-            video_i, video_p, video_n = next(self.dataloader_iter)
-
-            video_i = video_i.to(device=utils.device(), dtype=torch.float)
-            video_p = video_p.to(device=utils.device(), dtype=torch.float)
-            video_n = video_n.to(device=utils.device(), dtype=torch.float)
-
-            video_i, video_p, video_n = datasets.ViRLVideoDataset.augment(video_i, video_p, video_n)
+            video, classes = next(self.dataloader_iter)
+            video = video.to(device=utils.device(), dtype=torch.float)
+            video = datasets.CMCVideoDataset.augment(video)
+            print(classes)
+            sys.exit()
 
             metrics = self.encoder.update(video_i, video_p, video_n)
 
