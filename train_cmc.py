@@ -70,13 +70,11 @@ class Workspace:
         self.encoder.train()
 
         while train_until_epoch(self._epoch):
-            video, classes = next(self.dataloader_iter)
+            video = next(self.dataloader_iter)
             video = video.to(device=utils.device(), dtype=torch.float)
             video = datasets.CMCVideoDataset.augment(video)
-            print(classes)
-            sys.exit()
 
-            metrics = self.encoder.update(video_i, video_p, video_n)
+            metrics = self.encoder.update(video)
 
             self.logger.log_metrics(metrics, self._epoch, 'train')
 
@@ -90,13 +88,9 @@ class Workspace:
                 with torch.no_grad():
                     metrics = None
                     for _ in range(self.cfg.num_evaluations):
-                        video_i, video_p, video_n = next(self.valid_dataloader_iter)
-
-                        video_i = video_i.to(device=utils.device(), dtype=torch.float)
-                        video_p = video_p.to(device=utils.device(), dtype=torch.float)
-                        video_n = video_n.to(device=utils.device(), dtype=torch.float)
-
-                        m, _ = self.encoder.evaluate(video_i, video_p, video_n)
+                        video = next(self.valid_dataloader_iter)
+                        video = video.to(device=utils.device(), dtype=torch.float)
+                        m, _ = self.encoder.evaluate(video)
 
                         if metrics is None:
                             metrics = m

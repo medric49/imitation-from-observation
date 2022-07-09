@@ -8,6 +8,24 @@ from torch.nn import functional as F
 from losses import SupConLoss
 
 
+class OneSideContrastLoss(nn.Module):
+    def __init__(self, temperature=0.07):
+        super(OneSideContrastLoss, self).__init__()
+        self.temperature = temperature
+
+    def forward(self, h_i, h_p, h_n_sample):
+        nb_negative = h_n_sample.shape[0]
+        h_i = h_i.unsqueeze(0)
+        h_p = h_p.unsqueeze(0)
+
+        sim_1 = torch.exp(F.cosine_similarity(h_i, h_p) * self.temperature).sum()
+        sim_2 = torch.exp(F.cosine_similarity(h_i.repeat(nb_negative), h_n_sample) * self.temperature).sum()
+
+        loss = -torch.log(sim_1 / (sim_1 + sim_2))
+
+        return loss
+
+
 class HalfConvNet(nn.Module):
     def __init__(self, in_channel, hidden_dim):
         super(HalfConvNet, self).__init__()
@@ -97,6 +115,7 @@ class CMCModel(nn.Module):
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
+        self.one_side_contrast_loss = OneSideContrastLoss()
 
     def encode(self, video):
         e_seq = self.encode_frame(video)
@@ -140,31 +159,18 @@ class CMCModel(nn.Module):
         video = torch.stack(video)
         return video
 
-    def evaluate(self, video_i, video_p, video_n):
-        T = video_i.shape[1]
-        n = video_i.shape[0]
+    def evaluate(self, video):
+        T = video.shape[1]
+        n = video.shape[0]
 
-        video_i = torch.transpose(video_i, dim0=0, dim1=1)  # T x n x c x h x w
-        video_p = torch.transpose(video_p, dim0=0, dim1=1)  # T x n x c x h x w
-        video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
+        video = torch.transpose(video, dim0=0, dim1=1)  # T x n x c x h x w
 
-        e_i1, e_i2 = self._encode(video_i)  # T x n x z/2
-        e_p1, e_p2 = self._encode(video_p)  # T x n x z/2
-        e_n1, e_n2 = self._encode(video_n)  # T x n x z/2
+        e_1_seq, e_2_seq = self._encode(video)  # T x n x z/2
 
-        e_1 = torch.cat([e_i1, e_p1, e_n1], dim=1).view(-1, self.hidden_dim)  # 3Tn x z/2
-        e_2 = torch.cat([e_i2, e_p2, e_n2], dim=1).view(-1, self.hidden_dim)  # 3Tn x z/2
+        e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x n x z
 
-        e_i_seq = torch.cat([e_i1, e_i2], dim=2)  # T x n x z
-        e_p_seq = torch.cat([e_p1, e_p2], dim=2)  # T x n x z
-        e_n_seq = torch.cat([e_n1, e_n2], dim=2)  # T x n x z
-
-        h_i_seq, hidden_i = self.lstm_enc(e_i_seq)  # T x n x z
-        h_p_seq, hidden_p = self.lstm_enc(e_p_seq)  # T x n x z
-        h_n_seq, hidden_n = self.lstm_enc(e_n_seq)  # T x n x z
-
-        video0_i = self._decode(e_i_seq)
-        video0_p = self._decode(e_p_seq)
+        h_seq, hidden = self.lstm_enc(e_seq)  # T x n x z
+        video0 = self._decode(e_seq)
 
         t = random.randint(0, T-1)
         context_width = 2
@@ -177,15 +183,18 @@ class CMCModel(nn.Module):
         c_t = random.choice(c_list)
         nc_t = random.choice(nc_list)
 
-        e_seq = torch.cat([e_i_seq, e_p_seq, e_n_seq], dim=1)  # T x 3n x z
         e_t = e_seq[t]
         e_c_t = e_seq[c_t]
         e_nc_t = e_seq[nc_t]
 
-        l_sns = self.loss_sns(h_i_seq[-1], h_p_seq[-1], h_n_seq[-1])
-        l_contrast = self.contrast_loss(torch.stack([e_1, e_2], dim=1))
+        h_i = h_seq[:, 0, :][-1]  # z
+        h_p = h_seq[:, 1, :][-1]  # z
+        h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
+
+        l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples)
+        l_contrast = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1))
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
-        l_vaei = self.loss_vae(video_i, video0_i) + self.loss_vae(video_p, video0_p)
+        l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
         loss += l_sns * 0.7
@@ -205,13 +214,13 @@ class CMCModel(nn.Module):
 
         return metrics, loss
 
-    def update(self, video_i, video_p, video_n):
+    def update(self, video):
 
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
         self.deconv.zero_grad()
 
-        metrics, loss = self.evaluate(video_i, video_p, video_n)
+        metrics, loss = self.evaluate(video)
 
         loss.backward()
 
