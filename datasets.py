@@ -244,7 +244,7 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
 
     @staticmethod
     def augment(video: torch.Tensor):
-        video = ViRLVideoDataset.random_sequence_cropping(video)
+        video = CMCVideoDataset.random_sequence_cropping(video)
         return video
 
     @staticmethod
