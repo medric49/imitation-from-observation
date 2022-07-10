@@ -221,7 +221,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             if self.use_frame_state:
                 state = self.agent_states[-1]
             else:
-                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                agent_states = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
                 state = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
 
         if self.use_target_state:
@@ -238,7 +238,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             if self.use_frame_state:
                 state = self.agent_states[-1]
             else:
-                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                agent_states = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
                 state = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
 
         if self.dist_reward:
@@ -247,13 +247,13 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 reward_2 = 0
 
                 h_1 = self.expert_seq_states[self.step_id]
-                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                agent_states = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
                 h_2 = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
                 reward_1 += -np.linalg.norm(h_1 - h_2)
 
-                # e_1 = self.expert_states[self.step_id]
-                # e_2 = self.agent_states[-1]
-                # reward_2 += -np.linalg.norm(e_1 - e_2)
+                e_1 = self.expert_states[self.step_id]
+                e_2 = self.agent_states[-1]
+                reward_2 += -np.linalg.norm(e_1 - e_2)
 
             reward = reward_1 + reward_2
         else:
