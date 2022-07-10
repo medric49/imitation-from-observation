@@ -123,8 +123,9 @@ class CMCModel(nn.Module):
         return h[-1]
 
     def encode_state_seq(self, e_seq):
-        h, _ = self.lstm_enc(e_seq)
-        return h[-1]
+        e_seq = e_seq.unsqueeze(1)  # T x 1 x z
+        h_seq, _ = self.lstm_enc(e_seq)
+        return h_seq.squeeze(1)
 
     def encode_frame(self, image):
         shape = image.shape

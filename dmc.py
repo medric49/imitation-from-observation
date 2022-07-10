@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from numpy.linalg import norm
 
+import cmc_model
 import context_changers
 import ct_model
 import drqv2
@@ -149,7 +150,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.context_changer = context_changer
         self.expert: drqv2.DrQV2Agent = expert
         self.expert.train(False)
-        self.encoder: virl_model.ViRLNet = encoder
+        self.encoder: cmc_model.CMCModel = encoder
         self.encoder.eval()
         self.frame_stack = frame_stack
 
@@ -166,6 +167,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.to_lab = to_lab
 
         self.expert_states = None
+        self.expert_seq_states = None
         self.agent_states = None
 
         self.init_channel = self._env.observation_spec().shape[0] // self.frame_stack
@@ -195,8 +197,9 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
             episode = np.array(episode)
             episode = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
-            e_seq = self.encoder.encode_frame(episode).cpu().numpy()
-        return e_seq
+            e_seq = self.encoder.encode_frame(episode)
+            z_seq = self.encoder.encode_state_seq(e_seq)
+        return e_seq.cpu().numpy(), z_seq.cpu().numpy()
 
     def encode(self, observation):
         frame = observation[-self.init_channel:]
@@ -207,7 +210,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         return state
 
     def reset(self) -> TimeStep:
-        self.expert_states = self.make_expert_states()
+        self.expert_states, self.expert_seq_states = self.make_expert_states()
         self.agent_states = []
 
         time_step = self._env.reset()
@@ -218,7 +221,8 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             if self.use_frame_state:
                 state = self.agent_states[-1]
             else:
-                state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
+                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                state = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
 
         if self.use_target_state:
             target_state = self.expert_states[self.step_id + 1]
@@ -234,23 +238,22 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             if self.use_frame_state:
                 state = self.agent_states[-1]
             else:
-                state = self.encoder.encode_state_seq(torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())).cpu().numpy()
+                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                state = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
 
         if self.dist_reward:
             with torch.no_grad():
                 reward_1 = 0
                 reward_2 = 0
 
-                expert_e_seq = torch.tensor(self.expert_states[:self.step_id+1], dtype=torch.float, device=utils.device())
-                agent_e_seq = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                h_1 = self.expert_seq_states[self.step_id]
+                agent_states = torch.tensor(self.agent_states, dtype=torch.float, device=utils.device())
+                h_2 = self.encoder.encode_state_seq(agent_states)[-1].cpu().numpy()
+                reward_1 += -np.linalg.norm(h_1 - h_2)
 
-                # h_1 = self.encoder.encode_state_seq(expert_e_seq).cpu().numpy()
-                # h_2 = self.encoder.encode_state_seq(agent_e_seq).cpu().numpy()
-                # reward_1 += -np.linalg.norm(h_1 - h_2)
-
-                e_1 = expert_e_seq[-1].cpu().numpy()
-                e_2 = agent_e_seq[-1].cpu().numpy()
-                reward_2 += -np.linalg.norm(e_1 - e_2)
+                # e_1 = self.expert_states[self.step_id]
+                # e_2 = self.agent_states[-1]
+                # reward_2 += -np.linalg.norm(e_1 - e_2)
 
             reward = reward_1 + reward_2
         else:
