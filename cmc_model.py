@@ -18,8 +18,8 @@ class OneSideContrastLoss(nn.Module):
         h_i = h_i.unsqueeze(0)
         h_p = h_p.unsqueeze(0)
 
-        sim_1 = torch.exp(F.cosine_similarity(h_i, h_p) * self.temperature).sum()
-        sim_2 = torch.exp(F.cosine_similarity(h_i.repeat(nb_negative), h_n_sample) * self.temperature).sum()
+        sim_1 = torch.exp(F.cosine_similarity(h_i, h_p) * (1. / self.temperature)).sum()
+        sim_2 = torch.exp(F.cosine_similarity(h_i.repeat([nb_negative, 1]), h_n_sample) * (1. / self.temperature)).sum()
 
         loss = -torch.log(sim_1 / (sim_1 + sim_2))
 
@@ -191,7 +191,7 @@ class CMCModel(nn.Module):
         h_p = h_seq[:, 1, :][-1]  # z
         h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
 
-        l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples)
+        l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
         l_contrast = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1))
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_vaei = self.loss_vae(video, video0)

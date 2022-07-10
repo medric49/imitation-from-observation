@@ -236,7 +236,7 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
 
         self.batch_item = (self.batch_item + 1) % self.batch_size
 
-        return video, item_class
+        return video
 
     def rgb_to_lab(self, video):
         T = video.shape[0]
