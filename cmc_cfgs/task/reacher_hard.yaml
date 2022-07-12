@@ -1,5 +1,5 @@
-train_video_dir: 'videos/reacher_hard_virl_wc/train'
-valid_video_dir: 'videos/reacher_hard_virl_wc/valid'
+train_video_dir: 'videos/reacher_hard/train'
+valid_video_dir: 'videos/reacher_hard/valid'
 train_cams: [0]
 
 exp_group: 'reacher_hard'
