@@ -1,0 +1,19 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: reacher_hard
+
+expert_file: experts/reacher_hard.pt
+ct_file: ct/reacher_hard.pt
+virl_file: virl/reacher_hard.pt
+cmc_file: cmc_exp_local/reacher_hard_wc/1/snapshot.pt
+xml_path: domain_xmls/reacher.xml
+
+context_camera_ids: [0]
+learner_camera_id: 0
+
+exp_group: reacher_hard_wc
+
+context_changer:
+  _target_: context_changers.ReacherHardWCContextChanger
