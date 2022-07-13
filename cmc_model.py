@@ -132,12 +132,12 @@ class CMCModel(nn.Module):
 
         self.rho = rho
         self.hidden_dim = hidden_dim
-        self.conv = ConvNet(hidden_dim)
-        self.deconv = DeconvNet(hidden_dim)
+        self.conv = ConvNet224(hidden_dim)
+        # self.deconv = DeconvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
 
         self.conv_opt = torch.optim.Adam(self.conv.parameters(), lr)
-        self.deconv_opt = torch.optim.Adam(self.deconv.parameters(), lr)
+        # self.deconv_opt = torch.optim.Adam(self.deconv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
@@ -246,13 +246,13 @@ class CMCModel(nn.Module):
 
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
-        self.deconv.zero_grad()
+        # self.deconv_opt .zero_grad()
 
         metrics, loss = self.evaluate(video)
 
         loss.backward()
 
-        self.deconv_opt.step()
+        # self.deconv_opt.step()
         self.lstm_enc_opt.step()
         self.conv_opt.step()
 
