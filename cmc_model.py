@@ -1,10 +1,11 @@
 import random
 from pathlib import Path
 
-import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+
+import alexnet
 from losses import SupConLoss
 
 
@@ -24,6 +25,30 @@ class OneSideContrastLoss(nn.Module):
         loss = -torch.log(sim_1 / (sim_1 + sim_2))
 
         return loss
+
+
+class ConvNet224(nn.Module):
+    def __init__(self, hidden_dim):
+        super(ConvNet224, self).__init__()
+
+        self.alex_net = alexnet.MyAlexNetCMC()
+        self.alex_net.load_state_dict(torch.load('tmp/CMC_alexnet.pth')['model'])
+
+        self.fc_l = nn.Sequential(
+            nn.Linear(128, hidden_dim // 2),
+            nn.Sigmoid()
+        )
+
+        self.fc_ab = nn.Sequential(
+            nn.Linear(128, hidden_dim // 2),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x_l, x_ab = self.alex_net(x)
+        x_l = self.fc_l(x_l)
+        x_ab = self.fc_ab(x_ab)
+        return x_l, x_ab
 
 
 class HalfConvNet(nn.Module):
@@ -92,7 +117,8 @@ class ConvNet(nn.Module):
         self.enc_l = HalfConvNet(1, hidden_dim // 2)
         self.enc_ab = HalfConvNet(2, hidden_dim // 2)
 
-    def forward(self, x_l, x_ab):
+    def forward(self, x):
+        x_l, x_ab = torch.split(x, [1, 2], dim=1)
         x_l = self.enc_l(x_l)
         x_ab = self.enc_ab(x_ab)
 
@@ -131,8 +157,7 @@ class CMCModel(nn.Module):
         shape = image.shape
         if len(shape) == 3:
             image = image.unsqueeze(0)  # 1 x c x h x w
-        view_1, view_2 = torch.split(image, [1, 2], dim=1)
-        e_1, e_2 = self.conv(view_1, view_2)
+        e_1, e_2 = self.conv(image)
         e = torch.cat([e_1, e_2], dim=1)
         if len(shape) == 3:
             e = e.squeeze()
@@ -144,8 +169,7 @@ class CMCModel(nn.Module):
         e_2_seq = []
         for t in range(shape[0]):
             frame = video[t]  # n x c x h x w
-            view_1, view_2 = torch.split(frame, [1, 2], dim=1)
-            e_1, e_2 = self.conv(view_1, view_2)
+            e_1, e_2 = self.conv(frame)
             e_1_seq.append(e_1)
             e_2_seq.append(e_2)
         e_1_seq = torch.stack(e_1_seq)  # T x n x z/2
