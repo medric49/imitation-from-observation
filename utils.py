@@ -226,5 +226,7 @@ class RGB2Lab(object):
 def rgb_to_lab(img):
     lab = RGB2Lab()
     img = lab(img)
-    img = (img - np.array([50, 6.025, -6.6895])) / np.array([50, 92.208,  101.1675])
+    mean = np.array([(0 + 100) / 2, (-86.183 + 98.233) / 2, (-107.857 + 94.478) / 2])
+    std = np.array([(100 - 0) / 2, (86.183 + 98.233) / 2, (107.857 + 94.478) / 2])
+    img = (img - mean) / std
     return img
