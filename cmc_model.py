@@ -195,7 +195,7 @@ class CMCModel(nn.Module):
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x n x z
 
         h_seq, hidden = self.lstm_enc(e_seq)  # T x n x z
-        video0 = self._decode(e_seq)
+        # video0 = self._decode(e_seq)
 
         t = random.randint(0, T-1)
         context_width = 1
@@ -220,14 +220,14 @@ class CMCModel(nn.Module):
         l_contrast = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1))
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(e_t, e_c_t, e_nc_t)
-        l_vaei = self.loss_vae(video, video0)
+        # l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
-        loss += l_sns * 0.6
+        loss += l_sns * 0.7
         loss += l_seq * 0.1
         loss += l_contrast * 0.1
         loss += l_sni * 0.1
-        loss += l_vaei * 0.1
+        # loss += l_vaei * 0.1
 
         metrics = {
             'loss': loss.item(),
@@ -235,7 +235,7 @@ class CMCModel(nn.Module):
             'l_seq': l_seq.item(),
             'l_contrast': l_contrast.item(),
             'l_sin': l_sni.item(),
-            'l_vaei': l_vaei.item(),
+             # 'l_vaei': l_vaei.item(),
             'context_sim': F.cosine_similarity(e_t, e_c_t).abs().mean().item(),
             'non_context_sim': F.cosine_similarity(e_t, e_nc_t).abs().mean().item()
         }
