@@ -174,7 +174,7 @@ class CMCModel(nn.Module):
         video0 = self._decode(e_seq)
 
         t = random.randint(0, T-1)
-        context_width = 2
+        context_width = 1
         c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
         c_list.remove(t)
         nc_list = list(range(T))
@@ -195,10 +195,12 @@ class CMCModel(nn.Module):
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
         l_contrast = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1))
         l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+        l_seq = self.loss_sns(e_t, e_c_t, e_nc_t)
         l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
-        loss += l_sns * 0.7
+        loss += l_sns * 0.6
+        loss += l_seq * 0.1
         loss += l_contrast * 0.1
         loss += l_sni * 0.1
         loss += l_vaei * 0.1
@@ -206,6 +208,7 @@ class CMCModel(nn.Module):
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
+            'l_seq': l_seq.item(),
             'l_contrast': l_contrast.item(),
             'l_sin': l_sni.item(),
             'l_vaei': l_vaei.item(),

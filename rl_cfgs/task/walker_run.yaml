@@ -7,6 +7,7 @@ task_name: walker_run
 expert_file: experts/walker_run.pt
 ct_file: ct/walker_run.pt
 virl_file: virl/walker_run.pt
+cmc_file: cmc_exp_local/walker_run/1/snapshot.pt
 xml_path: domain_xmls/walker.xml
 
 context_camera_ids: [0]

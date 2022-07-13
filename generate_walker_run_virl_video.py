@@ -26,24 +26,25 @@ if __name__ == '__main__':
     expert = DrQV2Agent.load('experts/walker_run.pt')
     agent = RandomAgent(env)
 
-    num_train = 15000
-    num_valid = 3000
-    ep_len = 100
-    video_dir = Path('videos/walker_run_virl')
+    num_train = 4000
+    num_valid = 1000
+    ep_len = 50
+    video_dir = Path('videos/walker_run')
+    im_w, im_h = 224, 224
 
     utils.generate_video_from_expert(
         video_dir / 'train/1', agent, env, context_changers.WalkerRunContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_train)
+        num_frames=ep_len, num_train=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/1', agent, env, context_changers.WalkerRunContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid)
+        num_frames=ep_len, num_train=num_valid, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, context_changers.WalkerRunContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_train)
+        num_frames=ep_len, num_train=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, context_changers.WalkerRunContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid)
+        num_frames=ep_len, num_train=num_valid, im_w=im_w, im_h=im_h)
 
