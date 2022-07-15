@@ -1,0 +1,21 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: hopper_hop
+
+expert_file: experts/hopper_hop.pt
+ct_file: ct/hopper_hop.pt
+virl_file: virl/hopper_hop.pt
+cmc_file: cmc_exp_local/hopper_hop/1/snapshot.pt
+
+context_camera_ids: [0]
+learner_camera_id: 0
+
+exp_group: hopper_hop
+
+im_w: 64
+im_h: 64
+
+context_changer:
+  _target_: context_changers.NullContextChanger
