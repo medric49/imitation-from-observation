@@ -26,11 +26,11 @@ if __name__ == '__main__':
     expert = DrQV2Agent.load('experts/walker_run.pt')
     agent = RandomAgent(env)
 
-    num_train = 4000
-    num_valid = 1000
+    num_train = 15000
+    num_valid = 3000
     ep_len = 50
     video_dir = Path('videos/walker_run')
-    im_w, im_h = 224, 224
+    im_w, im_h = 64, 64
 
     utils.generate_video_from_expert(
         video_dir / 'train/1', agent, env, context_changers.WalkerRunContextChanger(), cam_ids=[0],

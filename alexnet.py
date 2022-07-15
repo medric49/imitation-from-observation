@@ -92,7 +92,7 @@ class alexnet_half(nn.Module):
         x = self.conv_block_5(x)
         if layer == 5:
             return x
-        x = x.view(x.shape[0], -1)
+        x = torch.flatten(x, start_dim=1)
         x = self.fc6(x)
         if layer == 6:
             return x
