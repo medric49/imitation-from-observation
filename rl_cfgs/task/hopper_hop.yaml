@@ -4,9 +4,7 @@ defaults:
 
 task_name: hopper_hop
 
-expert_file: experts/hopper_hop.pt
-ct_file: ct/hopper_hop.pt
-virl_file: virl/hopper_hop.pt
+expert_file: exp_local/hopper_hop/1/snapshot.pt
 cmc_file: cmc_exp_local/hopper_hop/1/snapshot.pt
 
 context_camera_ids: [0]

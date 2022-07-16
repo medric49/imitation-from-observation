@@ -23,7 +23,7 @@ class RandomAgent:
 
 if __name__ == '__main__':
     env = dmc.make('hopper_hop', frame_stack=3, action_repeat=2, seed=2)
-    expert = DrQV2Agent.load('exp_local/hopper_hop/default/snapshot.pt')
+    expert = DrQV2Agent.load('exp_local/hopper_hop/1/snapshot.pt')
     agent = RandomAgent(env)
 
     num_train = 15000
