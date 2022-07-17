@@ -12,8 +12,9 @@ import dmc
 import metaworld_env
 
 
-policies = {
-    'window-close-v2': policies.SawyerWindowCloseV2Policy
+env_data = {
+    'window_close': ('exp_local/window_close/1/snapshot.pt', 'window-close-v2'),
+    'door_open': ('exp_local/door_open/1/snapshot.pt', 'door-open-v2'),
 }
 
 
@@ -30,21 +31,22 @@ class RandomAgent:
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env-name', default='window-close-v2', type=str, help='Environment name', required=False)
-    parser.add_argument('--dir-name', default='window_close', type=str, help='Environment name', required=False)
+    parser.add_argument('--env', default='window_close', type=str, help='Environment name', required=False)
     args, _ = parser.parse_known_args(sys.argv[1:])
 
-    env = metaworld_env.Env(args.env_name)
+    env_dir = args.env
+    expert_file, env_name = env_data[env_dir]
+
+    env = metaworld_env.Env(env_name)
     env = dmc.wrap(env, frame_stack=3, action_repeat=2)
-    # expert = metaworld_env.Expert(policies[args.env_name](), env)
-    expert = drqv2.DrQV2Agent.load('exp_local/window_close/1/snapshot.pt')
+    expert = drqv2.DrQV2Agent.load(expert_file)
     expert.train(False)
     agent = RandomAgent(env)
 
     num_train = 15000
     num_valid = 3000
     ep_len = 50
-    video_dir = Path(f'videos/{args.dir_name}')
+    video_dir = Path(f'videos/{env_dir}')
 
     im_w, im_h = 64, 64
     utils.generate_video_from_expert(

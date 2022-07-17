@@ -1,0 +1,8 @@
+train_video_dir: 'videos/door_open/train'
+valid_video_dir: 'videos/door_open/valid'
+train_cams: [0]
+
+exp_group: 'door_open'
+
+episode_len: 50
+batch_size: 40

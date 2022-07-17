@@ -250,6 +250,10 @@ class CMCModel(nn.Module):
         self.deconv_opt.zero_grad()
 
         metrics, loss = self.evaluate(video)
+        loss = torch.nan_to_num(loss, -1)
+        if loss.item() == -1:
+            print('***')
+            return metrics
 
         loss.backward()
 

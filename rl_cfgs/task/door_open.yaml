@@ -1,0 +1,22 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: door-open-v2
+
+expert_file: exp_local/door_open/1/snapshot.pt
+cmc_file: cmc_exp_local/door_open/1/snapshot.pt
+
+context_camera_ids: [0]
+learner_camera_id: 0
+
+exp_group: door_open
+meta_world: true
+
+im_w: 64
+im_h: 64
+
+
+
+context_changer:
+  _target_: context_changers.NullContextChanger
