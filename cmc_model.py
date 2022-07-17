@@ -56,7 +56,6 @@ class HalfConvNet(nn.Module):
     def __init__(self, in_channel, hidden_dim):
         super(HalfConvNet, self).__init__()
         self.leaky_relu = nn.LeakyReLU()
-        self.sigmoid = nn.Sigmoid()
         self.conv_1 = nn.Conv2d(in_channel, 64, kernel_size=5, stride=2)
         self.b_norm_1 = nn.BatchNorm2d(64)
         self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
@@ -75,7 +74,7 @@ class HalfConvNet(nn.Module):
         c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
         c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.sigmoid(self.fc2(e))
+        e = self.fc2(e)
         e = e.view(e.shape[0], e.shape[1])
         return e
 
@@ -136,10 +135,12 @@ class CMCModel(nn.Module):
         self.conv = ConvNet(hidden_dim)
         self.deconv = DeconvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
+        self.lstm_dec = LSTMDecoder(hidden_dim)
 
         self.conv_opt = torch.optim.Adam(self.conv.parameters(), lr)
         self.deconv_opt = torch.optim.Adam(self.deconv.parameters(), lr)
         self.lstm_enc_opt = torch.optim.Adam(self.lstm_enc.parameters(), lr)
+        self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
         self.one_side_contrast_loss = OneSideContrastLoss()
@@ -196,6 +197,7 @@ class CMCModel(nn.Module):
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x n x z
 
         h_seq, hidden = self.lstm_enc(e_seq)  # T x n x z
+        e0_seq = self.lstm_dec(h_seq)
         video0 = self._decode(e_seq)
 
         t = random.randint(0, T-1)
@@ -213,32 +215,36 @@ class CMCModel(nn.Module):
         e_c_t = e_seq[c_t]
         e_nc_t = e_seq[nc_t]
 
-        h_i = h_seq[:, 0, :][-1]  # z
-        h_p = h_seq[:, 1, :][-1]  # z
-        h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
+        h_t = h_seq[t]
+        h_c_t = h_seq[c_t]
+        h_nc_t = h_seq[nc_t]
+
+        h_i = h_seq[:, 0, :][t]  # z
+        h_p = h_seq[:, 1, :][t]  # z
+        h_n_samples = h_seq[:, 2:, :][t]  # (n-2) x z
 
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
-        l_contrast = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1))
-        l_sni = self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
-        l_seq = self.loss_sns(e_t, e_c_t, e_nc_t)
+        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)
+        l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
+        l_vaes = self.loss_vae_seq(e_seq, e0_seq)
         l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
         loss += l_sns * 0.6
+        loss += l_frame * 0.1
         loss += l_seq * 0.1
-        loss += l_contrast * 0.1
-        loss += l_sni * 0.1
+        loss += l_vaes * 0.1
         loss += l_vaei * 0.1
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
+            'l_frame': l_frame.item(),
             'l_seq': l_seq.item(),
-            'l_contrast': l_contrast.item(),
-            'l_sin': l_sni.item(),
-             'l_vaei': l_vaei.item(),
-            'context_sim': F.cosine_similarity(e_t, e_c_t).abs().mean().item(),
-            'non_context_sim': F.cosine_similarity(e_t, e_nc_t).abs().mean().item()
+            'l_vaes': l_vaes.item(),
+            'l_vaei': l_vaei.item(),
+            'context_sim': F.cosine_similarity(h_t, h_c_t).abs().mean().item(),
+            'non_context_sim': F.cosine_similarity(h_t, h_nc_t).abs().mean().item()
         }
 
         return metrics, loss
@@ -247,6 +253,7 @@ class CMCModel(nn.Module):
 
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
+        self.lstm_dec_opt.zero_grad()
         self.deconv_opt.zero_grad()
 
         metrics, loss = self.evaluate(video)
@@ -259,12 +266,21 @@ class CMCModel(nn.Module):
 
         self.deconv_opt.step()
         self.lstm_enc_opt.step()
+        self.lstm_dec_opt.zero_grad()
         self.conv_opt.step()
 
         return metrics
 
     def loss_sns(self, h_i, h_p, h_n):
         return F.mse_loss(h_i, h_p) + max(self.rho - F.mse_loss(h_i, h_n), 0.)
+
+    def loss_vae_seq(self, e_seq, e0_seq):
+        T = e_seq.shape[0]
+        l = 0.
+        for t in range(T):
+            l += F.mse_loss(e_seq[t], e0_seq[t])
+        l /= T
+        return l
 
     def loss_vae(self, video1, video2):
         T = video1.shape[0]
@@ -290,10 +306,21 @@ class LSTMEncoder(nn.Module):
         self.num_layers = 2
         self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
         self.fc = nn.Linear(input_size, input_size)
-        self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
         T = e_seq.shape[0]
         h_seq, hidden = self.encoder(e_seq)
-        h_seq = torch.stack([self.sigmoid(self.fc(h_seq[i])) for i in range(T)])
+        h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
         return h_seq, hidden
+
+
+class LSTMDecoder(nn.Module):
+    def __init__(self, input_size):
+        super(LSTMDecoder, self).__init__()
+        self.num_layers = 2
+        self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
+        self.fc = nn.Linear(input_size, input_size)
+
+    def forward(self, h_seq, T):
+        h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
+        return self.decoder(h_seq)
