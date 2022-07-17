@@ -321,6 +321,7 @@ class LSTMDecoder(nn.Module):
         self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
         self.fc = nn.Linear(input_size, input_size)
 
-    def forward(self, h_seq, T):
+    def forward(self, h_seq):
+        T = h_seq.shape[0]
         h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
-        return self.decoder(h_seq)
+        return self.decoder(h_seq)[0]
