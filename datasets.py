@@ -205,6 +205,7 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
 
         self.batch_size = batch_size
         self.batch_item = 0
+        self.selected_files = []
 
         self.class_1 = None
         self.class_2 = None
@@ -216,6 +217,7 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
             cam1, cam2, cam3 = 0, 0, 0
 
         if self.batch_item == 0:
+            self.selected_files = []
             classes = list(range(self._num_classes))
             self.class_1 = random.choice(classes)
             classes.remove(self.class_1)
@@ -227,6 +229,9 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
             item_class = self.class_2
 
         video = random.choice(self._files[item_class])
+        while video in self.selected_files:
+            video = random.choice(self._files[item_class])
+        self.selected_files.append(video)
         video = np.load(video)[cam1, :self._episode_len]
 
         if self.to_lab:
