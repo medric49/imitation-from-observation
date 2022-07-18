@@ -12,6 +12,7 @@ learner_camera_id: 0
 
 exp_group: door_open
 meta_world: true
+episode_len: 250
 
 im_w: 64
 im_h: 64

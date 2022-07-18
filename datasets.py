@@ -257,7 +257,7 @@ class CMCVideoDataset(torch.utils.data.IterableDataset):
         T = video.shape[1]
         # base = sum(list(range(T)))
         # p_list = [(T - i)/base for i in range(T)]
-        p_list = [1./10 for i in range(T)]
+        p_list = [0.05 for i in range(T)]
 
         indices = [i for i in range(T) if np.random.rand() > p_list[i]]
         video = video[:, indices, :, :, :]

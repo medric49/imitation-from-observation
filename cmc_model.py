@@ -55,7 +55,8 @@ class ConvNet224(nn.Module):
 class HalfConvNet(nn.Module):
     def __init__(self, in_channel, hidden_dim):
         super(HalfConvNet, self).__init__()
-        self.leaky_relu = nn.LeakyReLU()
+        self.leaky_relu = nn.LeakyReLU(inplace=True)
+        self.sigmoid = nn.Sigmoid()
         self.conv_1 = nn.Conv2d(in_channel, 64, kernel_size=5, stride=2)
         self.b_norm_1 = nn.BatchNorm2d(64)
         self.conv_2 = nn.Conv2d(64, 128, kernel_size=5, stride=2)
@@ -69,12 +70,12 @@ class HalfConvNet(nn.Module):
         self.fc2 = nn.Conv2d(hidden_dim * 4, hidden_dim, kernel_size=1)
 
     def forward(self, obs):
-        c1 = self.leaky_relu(self.b_norm_1(self.conv_1(obs)))
-        c2 = self.leaky_relu(self.b_norm_2(self.conv_2(c1)))
-        c3 = self.leaky_relu(self.b_norm_3(self.conv_3(c2)))
-        c4 = self.leaky_relu(self.b_norm_4(self.conv_4(c3)))
-        e = self.leaky_relu(self.b_norm_fc_1(self.fc1(c4)))
-        e = self.fc2(e)
+        e = self.leaky_relu(self.b_norm_1(self.conv_1(obs)))
+        e = self.leaky_relu(self.b_norm_2(self.conv_2(e)))
+        e = self.leaky_relu(self.b_norm_3(self.conv_3(e)))
+        e = self.leaky_relu(self.b_norm_4(self.conv_4(e)))
+        e = self.leaky_relu(self.b_norm_fc_1(self.fc1(e)))
+        e = self.sigmoid(self.fc2(e))
         e = e.view(e.shape[0], e.shape[1])
         return e
 
@@ -82,7 +83,7 @@ class HalfConvNet(nn.Module):
 class DeconvNet(nn.Module):
     def __init__(self, hidden_dim):
         super(DeconvNet, self).__init__()
-        self.leaky_relu = nn.LeakyReLU()
+        self.leaky_relu = nn.LeakyReLU(inplace=True)
 
         self.fc2 = nn.Conv2d(hidden_dim, hidden_dim * 4, kernel_size=1)
         self.fc1 = nn.Conv2d(hidden_dim * 4, 512, kernel_size=1)
@@ -224,7 +225,7 @@ class CMCModel(nn.Module):
         h_n_samples = h_seq[:, 2:, :][t]  # (n-2) x z
 
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
-        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)
+        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
         l_vaes = self.loss_vae_seq(e_seq, e0_seq)
         l_vaei = self.loss_vae(video, video0)
@@ -266,7 +267,7 @@ class CMCModel(nn.Module):
 
         self.deconv_opt.step()
         self.lstm_enc_opt.step()
-        self.lstm_dec_opt.zero_grad()
+        self.lstm_dec_opt.step()
         self.conv_opt.step()
 
         return metrics
@@ -306,11 +307,12 @@ class LSTMEncoder(nn.Module):
         self.num_layers = 2
         self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
         self.fc = nn.Linear(input_size, input_size)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
         T = e_seq.shape[0]
         h_seq, hidden = self.encoder(e_seq)
-        h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
+        h_seq = torch.stack([self.sigmoid(self.fc(h_seq[i])) for i in range(T)])
         return h_seq, hidden
 
 
