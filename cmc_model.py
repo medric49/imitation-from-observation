@@ -220,9 +220,9 @@ class CMCModel(nn.Module):
         h_c_t = h_seq[c_t]
         h_nc_t = h_seq[nc_t]
 
-        h_i = h_seq[:, 0, :][t]  # z
-        h_p = h_seq[:, 1, :][t]  # z
-        h_n_samples = h_seq[:, 2:, :][t]  # (n-2) x z
+        h_i = h_seq[:, 0, :][-1]  # z
+        h_p = h_seq[:, 1, :][-1]  # z
+        h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
 
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
         l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
@@ -305,14 +305,14 @@ class LSTMEncoder(nn.Module):
     def __init__(self, input_size):
         super(LSTMEncoder, self).__init__()
         self.num_layers = 2
-        self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
-        self.fc = nn.Linear(input_size, input_size)
+        self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers, bidirectional=True)
+        self.fc = nn.Linear(input_size * 2, input_size)
         self.sigmoid = nn.Sigmoid()
 
     def forward(self, e_seq):
         T = e_seq.shape[0]
         h_seq, hidden = self.encoder(e_seq)
-        h_seq = torch.stack([self.sigmoid(self.fc(h_seq[i])) for i in range(T)])
+        h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
         return h_seq, hidden
 
 
@@ -320,10 +320,11 @@ class LSTMDecoder(nn.Module):
     def __init__(self, input_size):
         super(LSTMDecoder, self).__init__()
         self.num_layers = 2
-        self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
-        self.fc = nn.Linear(input_size, input_size)
+        self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers, bidirectional=True)
+        self.fc = nn.Linear(input_size * 2, input_size)
 
     def forward(self, h_seq):
         T = h_seq.shape[0]
-        h_seq = torch.stack([self.fc(h_seq[i]) for i in range(T)])
-        return self.decoder(h_seq)[0]
+        e_seq = self.decoder(h_seq)[0]
+        e_seq = torch.stack([self.fc(e_seq[i]) for i in range(T)])
+        return e_seq
