@@ -198,7 +198,6 @@ class CMCModel(nn.Module):
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x n x z
 
         h_seq, hidden = self.lstm_enc(e_seq)  # T x n x z
-        e0_seq = self.lstm_dec(h_seq)
         video0 = self._decode(e_seq)
 
         t = random.randint(0, T-1)
@@ -224,10 +223,14 @@ class CMCModel(nn.Module):
         h_p = h_seq[:, 1, :][-1]  # z
         h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
 
+        l_vaes = 0.
+        for i in range(T):
+            e0_seq = self.lstm_dec(e_seq[:i+1])
+            l_vaes += self.loss_vae_seq(e_seq[:i+1], e0_seq)
+
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
         l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
-        l_vaes = self.loss_vae_seq(e_seq, e0_seq)
         l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
