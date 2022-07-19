@@ -230,3 +230,18 @@ def rgb_to_lab(img):
     std = np.array([(100 - 0) / 2, (86.183 + 98.233) / 2, (107.857 + 94.478) / 2])
     img = (img - mean) / std
     return img
+
+
+class RandomAgent:
+    def __init__(self, env):
+        self.env = env
+        self.training = None
+
+    def train(self, *args, **kwargs):
+        pass
+
+    def act(self, *args, **kwargs):
+        return random.uniform(self.env.action_spec().minimum, self.env.action_spec().maximum)
+
+    def eval(self, *args, **kwargs):
+        pass

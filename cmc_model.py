@@ -223,14 +223,10 @@ class CMCModel(nn.Module):
         h_p = h_seq[:, 1, :][-1]  # z
         h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
 
-        l_vaes = 0.
-        for i in range(T):
-            e0_seq = self.lstm_dec(e_seq[:i+1])
-            l_vaes += self.loss_vae_seq(e_seq[:i+1], e0_seq)
-
         l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
         l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
+        l_vaes = self.loss_vae_seq(e_seq[:t+1], self.lstm_dec(h_t, t+1))
         l_vaei = self.loss_vae(video, video0)
 
         loss = 0.
@@ -246,9 +242,7 @@ class CMCModel(nn.Module):
             'l_frame': l_frame.item(),
             'l_seq': l_seq.item(),
             'l_vaes': l_vaes.item(),
-            'l_vaei': l_vaei.item(),
-            'context_sim': F.cosine_similarity(h_t, h_c_t).abs().mean().item(),
-            'non_context_sim': F.cosine_similarity(h_t, h_nc_t).abs().mean().item()
+            'l_vaei': l_vaei.item()
         }
 
         return metrics, loss
@@ -308,9 +302,8 @@ class LSTMEncoder(nn.Module):
     def __init__(self, input_size):
         super(LSTMEncoder, self).__init__()
         self.num_layers = 2
-        self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers, bidirectional=True)
-        self.fc = nn.Linear(input_size * 2, input_size)
-        self.sigmoid = nn.Sigmoid()
+        self.encoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
+        self.fc = nn.Linear(input_size, input_size)
 
     def forward(self, e_seq):
         T = e_seq.shape[0]
@@ -323,11 +316,15 @@ class LSTMDecoder(nn.Module):
     def __init__(self, input_size):
         super(LSTMDecoder, self).__init__()
         self.num_layers = 2
-        self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers, bidirectional=True)
-        self.fc = nn.Linear(input_size * 2, input_size)
+        self.decoder = nn.LSTM(input_size=input_size, hidden_size=input_size, num_layers=self.num_layers)
+        self.fc = nn.Linear(input_size, input_size)
 
-    def forward(self, h_seq):
-        T = h_seq.shape[0]
-        e_seq = self.decoder(h_seq)[0]
-        e_seq = torch.stack([self.fc(e_seq[i]) for i in range(T)])
+    def forward(self, h, T):
+        hidden = None
+        e_seq = []
+        h = h.unsqueeze(0)
+        for t in range(T):
+            h, hidden = self.decoder(h, hidden)
+            e_seq.append(self.fc(h[0]))
+        e_seq = torch.stack(e_seq)
         return e_seq
