@@ -91,97 +91,43 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
     def _sample(self):
         if len(self._cam_ids) > 1:
-            cam1, cam2, cam3 = random.sample(self._cam_ids, k=3)
+            cam1, cam2 = random.sample(self._cam_ids, k=3)
         else:
-            cam1, cam2, cam3 = 0, 0, 0
+            cam1, cam2 = 0, 0
 
         classes = list(range(self._num_classes))
         class_1 = random.choice(classes)
         classes.remove(class_1)
         class_2 = random.choice(classes)
 
-        video_i, video_p = random.choices(self._files[class_1], k=2)
+        video_i = random.choice(self._files[class_1])
         video_n = random.choice(self._files[class_2])
 
         video_i = np.load(video_i)[cam1, :self._episode_len]
-        video_p = np.load(video_p)[cam2, :self._episode_len]
-        video_n = np.load(video_n)[cam3, :self._episode_len]
+        video_n = np.load(video_n)[cam2, :self._episode_len]
 
         if self.to_lab:
             video_i = self.rgb_to_lab(video_i)
-            video_p = self.rgb_to_lab(video_p)
             video_n = self.rgb_to_lab(video_n)
 
         video_i = video_i.transpose(0, 3, 1, 2).copy()
-        video_p = video_p.transpose(0, 3, 1, 2).copy()
         video_n = video_n.transpose(0, 3, 1, 2).copy()
 
-        return video_i, video_p, video_n
+        return video_i, video_n
 
     def rgb_to_lab(self, video):
         T = video.shape[0]
         return np.array([utils.rgb_to_lab(video[t]) for t in range(T)])
 
-
     @staticmethod
-    def augment(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
-        # video_i, video_p, video_n = ViRLVideoDataset.augment_images(video_i, video_p, video_n)
-        # video_i, video_p, video_n = ViRLVideoDataset.add_noise(video_i, video_p, video_n)
-        # video_i, video_p, video_n = ViRLVideoDataset.random_shuffle(video_i, video_p, video_n)
-        video_i, video_p, video_n = ViRLVideoDataset.random_sequence_cropping(video_i, video_p, video_n)
-        return video_i, video_p, video_n
-
-    @staticmethod
-    def augment_images(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
-        aug = RandomShiftsAug(pad=8)
-        T = video_i.shape[0]
-        video_1, video_2, video_3 = [], [], []
-        for t in range(T):
-            frame_1, frame_2, frame_3 = video_i[t], video_p[t], video_n[t]
-            frame_1, frame_2, frame_3 = aug(frame_1), aug(frame_2), aug(frame_3)
-            video_1.append(frame_1)
-            video_2.append(frame_2)
-            video_3.append(frame_3)
-        video_1 = torch.stack(video_1)
-        video_2 = torch.stack(video_2)
-        video_3 = torch.stack(video_3)
-        return video_1, video_2, video_3
-
-    @staticmethod
-    def add_noise(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor, mean=128., std=0.02):
-        video_1 = video_i + torch.normal(mean, std, video_i.shape, device=video_i.device)
-        video_2 = video_p + torch.normal(mean, std, video_p.shape, device=video_p.device)
-        video_3 = video_n + torch.normal(mean, std, video_n.shape, device=video_n.device)
-
-        video_1 = torch.clip(video_1, 0., 255.)
-        video_2 = torch.clip(video_2, 0., 255.)
-        video_3 = torch.clip(video_3, 0., 255.)
-
-        return video_1, video_2, video_3
-
-    @staticmethod
-    def random_shuffle(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor, p=0.5):
-        shuffle = np.random.rand() < p
-        if shuffle:
-            indx = torch.randperm(video_i.shape[0])
-            video_i = video_i[indx]
-            video_p = video_p[indx]
-            video_n = video_n[indx]
-        return video_i, video_p, video_n
-
-    @staticmethod
-    def random_sequence_cropping(video_i: torch.Tensor, video_p: torch.Tensor, video_n: torch.Tensor):
+    def augment(video_i: torch.Tensor, video_n: torch.Tensor):
         T = video_i.shape[1]
-        # base = sum(list(range(T)))
-        # p_list = [(T - i)/base for i in range(T)]
-        p_list = [1./10 for i in range(T)]
-
+        p_list = [0.05 for i in range(T)]
         indices = [i for i in range(T) if np.random.rand() > p_list[i]]
-        video_1 = video_i[:, indices, :, :, :]
-        video_2 = video_p[:, indices, :, :, :]
-        video_3 = video_n[:, indices, :, :, :]
+        video_i = video_i[:, indices, :, :, :]
+        video_n = video_n[:, indices, :, :, :]
 
-        return video_1, video_2, video_3
+        return video_i, video_n
 
     def __iter__(self) -> Iterator[T_co]:
         while True:

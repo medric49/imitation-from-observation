@@ -7,6 +7,7 @@ from torch.nn import functional as F
 from hydra.utils import to_absolute_path
 
 import alexnet
+import utils
 from losses import SupConLoss
 
 
@@ -144,7 +145,6 @@ class CMCModel(nn.Module):
         self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
-        self.one_side_contrast_loss = OneSideContrastLoss()
 
     def encode(self, video):
         e_seq = self.encode_frame(video)
@@ -187,29 +187,20 @@ class CMCModel(nn.Module):
         video = torch.stack(video)
         return video
 
-    def evaluate(self, video):
-        T = video.shape[1]
-        n = video.shape[0]
+    def evaluate(self, video_i, video_n):
+        T = video_i.shape[1]
+        n = video_i.shape[0]
 
-        video = torch.transpose(video, dim0=0, dim1=1)  # T x n x c x h x w
+        video_i = torch.transpose(video_i, dim0=0, dim1=1)  # T x n x c x h x w
+        video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
+        video = torch.cat([video_i, video_n], dim=1)  # T x 2n x c x h x w
 
-        e_1_seq, e_2_seq = self._encode(video)  # T x n x z/2
-
-        e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x n x z
-
-        h_seq, hidden = self.lstm_enc(e_seq)  # T x n x z
+        e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
+        e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
+        h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
         video0 = self._decode(e_seq)
 
-        t = random.randint(0, T-1)
-        context_width = 1
-        c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
-        c_list.remove(t)
-        nc_list = list(range(T))
-        nc_list.remove(t)
-        for i in c_list:
-            nc_list.remove(i)
-        c_t = random.choice(c_list)
-        nc_t = random.choice(nc_list)
+        t, c_t, nc_t = utils.context_indices(T, context_width=2)
 
         e_t = e_seq[t]
         e_c_t = e_seq[c_t]
@@ -219,12 +210,11 @@ class CMCModel(nn.Module):
         h_c_t = h_seq[c_t]
         h_nc_t = h_seq[nc_t]
 
-        h_i = h_seq[:, 0, :][-1]  # z
-        h_p = h_seq[:, 1, :][-1]  # z
-        h_n_samples = h_seq[:, 2:, :][-1]  # (n-2) x z
+        h_i = h_seq[:, :n, :][-1]
+        h_n = h_seq[:, n:, :][-1]
 
-        l_sns = self.one_side_contrast_loss(h_i, h_p, h_n_samples) + self.one_side_contrast_loss(h_p, h_i, h_n_samples)
-        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(n * T, -1), e_2_seq.view(n * T, -1)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+        l_sns = self.loss_sns(h_i, h_i[list(range(1, n)) + [0]], h_n)
+        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
         l_vaes = self.loss_vae_seq(e_seq[:t+1], self.lstm_dec(h_t, t+1))
         l_vaei = self.loss_vae(video, video0)
@@ -247,14 +237,13 @@ class CMCModel(nn.Module):
 
         return metrics, loss
 
-    def update(self, video):
-
+    def update(self, video_i, video_n):
         self.conv_opt.zero_grad()
         self.lstm_enc_opt.zero_grad()
         self.lstm_dec_opt.zero_grad()
         self.deconv_opt.zero_grad()
 
-        metrics, loss = self.evaluate(video)
+        metrics, loss = self.evaluate(video_i, video_n)
         loss = torch.nan_to_num(loss, -1)
         if loss.item() == -1:
             print('***')

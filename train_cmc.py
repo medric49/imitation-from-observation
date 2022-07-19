@@ -41,8 +41,8 @@ class Workspace:
         utils.set_seed_everywhere(cfg.seed)
         self.encoder: cmc_model.CMCModel = hydra.utils.instantiate(self.cfg.cmc_model).to(utils.device())
 
-        self.dataset = datasets.CMCVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.batch_size, to_lab=True)
-        self.valid_dataset = datasets.CMCVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.batch_size, to_lab=True)
+        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, to_lab=True)
+        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, to_lab=True)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -70,11 +70,12 @@ class Workspace:
         self.encoder.train()
 
         while train_until_epoch(self._epoch):
-            video = next(self.dataloader_iter)
-            video = video.to(device=utils.device(), dtype=torch.float)
-            video = datasets.CMCVideoDataset.augment(video)
+            video_i, video_n = next(self.dataloader_iter)
+            video_i = video_i.to(device=utils.device(), dtype=torch.float)
+            video_n = video_n.to(device=utils.device(), dtype=torch.float)
+            video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
 
-            metrics = self.encoder.update(video)
+            metrics = self.encoder.update(video_i, video_n)
 
             self.logger.log_metrics(metrics, self._epoch, 'train')
 
@@ -88,9 +89,10 @@ class Workspace:
                 with torch.no_grad():
                     metrics = None
                     for _ in range(self.cfg.num_evaluations):
-                        video = next(self.valid_dataloader_iter)
-                        video = video.to(device=utils.device(), dtype=torch.float)
-                        m, _ = self.encoder.evaluate(video)
+                        video_i, video_n = next(self.valid_dataloader_iter)
+                        video_i = video_i.to(device=utils.device(), dtype=torch.float)
+                        video_n = video_n.to(device=utils.device(), dtype=torch.float)
+                        m, _ = self.encoder.evaluate(video_i, video_n)
 
                         if metrics is None:
                             metrics = m

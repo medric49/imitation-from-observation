@@ -245,3 +245,17 @@ class RandomAgent:
 
     def eval(self, *args, **kwargs):
         pass
+
+
+def context_indices(T, context_width=1):
+    t = random.randint(0, T - 1)
+    c_list = list(range(max(t - context_width, 0), min(t + context_width + 1, T)))
+    c_list.remove(t)
+    nc_list = list(range(T))
+    nc_list.remove(t)
+    for i in c_list:
+        nc_list.remove(i)
+    c_t = random.choice(c_list)
+    nc_t = random.choice(nc_list)
+
+    return t, c_t, nc_t
