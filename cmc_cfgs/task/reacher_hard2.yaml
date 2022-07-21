@@ -6,3 +6,5 @@ exp_group: 'reacher_hard2'
 
 batch_size: 32
 episode_len: 30
+
+num_epochs: 6001
