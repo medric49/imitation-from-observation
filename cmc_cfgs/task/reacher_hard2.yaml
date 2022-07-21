@@ -1,0 +1,8 @@
+train_video_dir: 'videos/reacher_hard2/train'
+valid_video_dir: 'videos/reacher_hard2/valid'
+train_cams: [0]
+
+exp_group: 'reacher_hard2'
+
+batch_size: 32
+episode_len: 30

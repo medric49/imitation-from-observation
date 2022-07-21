@@ -122,7 +122,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def augment(video_i: torch.Tensor, video_n: torch.Tensor):
         T = video_i.shape[1]
-        p_list = [0.05 for i in range(T)]
+        p_list = [0.15 for i in range(T)]
         indices = [i for i in range(T) if np.random.rand() > p_list[i]]
         video_i = video_i[:, indices, :, :, :]
         video_n = video_n[:, indices, :, :, :]

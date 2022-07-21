@@ -4,6 +4,6 @@ train_cams: [0]
 
 exp_group: 'door_open'
 
-episode_len: 50
-batch_size: 32
-num_epochs: 10001
+episode_len: 40
+batch_size: 16
+num_epochs: 5001

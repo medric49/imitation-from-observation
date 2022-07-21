@@ -210,13 +210,16 @@ class CMCModel(nn.Module):
         h_c_t = h_seq[c_t]
         h_nc_t = h_seq[nc_t]
 
-        h_i = h_seq[:, :n, :][-1]
-        h_n = h_seq[:, n:, :][-1]
+        h_i_seq = h_seq[:, :n, :]
+        h_n_seq = h_seq[:, n:, :]
 
-        l_sns = self.loss_sns(h_i, h_i[list(range(1, n)) + [0]], h_n)
+        l_sns = 0.
+        for i in range(T):
+            l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
+        l_sns /= T
         l_frame = self.contrast_loss(torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
-        l_vaes = self.loss_vae_seq(e_seq[:t+1], self.lstm_dec(h_t, t+1))
+        l_vaes = self.loss_vae(video[:t+1], self._decode(self.lstm_dec(h_t, t+1)))
         l_vaei = self.loss_vae(video, video0)
 
         loss = 0.

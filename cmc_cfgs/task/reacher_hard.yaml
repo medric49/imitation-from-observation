@@ -3,3 +3,6 @@ valid_video_dir: 'videos/reacher_hard/valid'
 train_cams: [0]
 
 exp_group: 'reacher_hard'
+
+batch_size: 32
+episode_len: 30
