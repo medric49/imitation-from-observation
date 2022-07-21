@@ -17,7 +17,7 @@ if __name__ == '__main__':
 
     ep_len = 30
 
-    video_dir = Path('videos/reacher_hard')
+    video_dir = Path('videos/reacher_hard2')
 
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher_2_targets.xml')
     context_changer = context_changers.ReacherHardTargetSwitcherContextChanger()
@@ -25,7 +25,7 @@ if __name__ == '__main__':
         video_dir / 'train/1', expert, env, context_changer, cam_ids=[0],
         num_frames=ep_len, num_train=num_train)
 
-    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher.xml')
+    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher2.xml')
     context_changer = context_changers.ReacherHardContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, context_changer, cam_ids=[0],
@@ -37,7 +37,7 @@ if __name__ == '__main__':
         video_dir / 'valid/1', expert, env, context_changer, cam_ids=[0],
         num_frames=ep_len, num_train=num_valid)
 
-    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher.xml')
+    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher2.xml')
     context_changer = context_changers.ReacherHardContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, context_changer, cam_ids=[0],
