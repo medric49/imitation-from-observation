@@ -4,9 +4,8 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.nn import functional as F
-from hydra.utils import to_absolute_path
 
-import alexnet
+import nets
 import utils
 from losses import SupConLoss
 
@@ -27,30 +26,6 @@ class OneSideContrastLoss(nn.Module):
         loss = -torch.log(sim_1 / (sim_1 + sim_2))
 
         return loss
-
-
-class ConvNet224(nn.Module):
-    def __init__(self, hidden_dim):
-        super(ConvNet224, self).__init__()
-
-        self.alex_net = alexnet.MyAlexNetCMC()
-        self.alex_net.load_state_dict(torch.load(to_absolute_path('tmp/CMC_alexnet.pth'))['model'])
-
-        self.fc_l = nn.Sequential(
-            nn.Linear(128, hidden_dim // 2),
-            nn.Sigmoid()
-        )
-
-        self.fc_ab = nn.Sequential(
-            nn.Linear(128, hidden_dim // 2),
-            nn.Sigmoid()
-        )
-
-    def forward(self, x):
-        x_l, x_ab = self.alex_net(x)
-        x_l = self.fc_l(x_l)
-        x_ab = self.fc_ab(x_ab)
-        return x_l, x_ab
 
 
 class HalfConvNet(nn.Module):
@@ -134,8 +109,17 @@ class CMCModel(nn.Module):
 
         self.rho = rho
         self.hidden_dim = hidden_dim
-        self.conv = ConvNet(hidden_dim)
-        self.deconv = DeconvNet(hidden_dim)
+        self.img_encoder = nets.EfficientNetB0Encoder()
+        self.conv = nn.Sequential(
+            nn.Linear(1280, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, hidden_dim),
+        )
+        self.deconv = nn.Sequential(
+            nn.Linear(hidden_dim, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 1280)
+        )
         self.lstm_enc = LSTMEncoder(hidden_dim)
         self.lstm_dec = LSTMDecoder(hidden_dim)
 
@@ -145,6 +129,10 @@ class CMCModel(nn.Module):
         self.lstm_dec_opt = torch.optim.Adam(self.lstm_dec.parameters(), lr)
 
         self.contrast_loss = SupConLoss()
+
+    def train(self, *args, **kwargs):
+        super(CMCModel, self).train(*args, **kwargs)
+        self.img_encoder.eval()
 
     def encode(self, video):
         e_seq = self.encode_frame(video)
@@ -160,32 +148,37 @@ class CMCModel(nn.Module):
         shape = image.shape
         if len(shape) == 3:
             image = image.unsqueeze(0)  # 1 x c x h x w
-        e_1, e_2 = self.conv(image)
-        e = torch.cat([e_1, e_2], dim=1)
+        e = self.img_encoder(image)
+        e = self.conv(image)
         if len(shape) == 3:
             e = e.squeeze()
         return e
 
-    def _encode(self, video):
+    def _encode_video(self, video):
         shape = video.shape  # T x n x c x h x w
-        e_1_seq = []
-        e_2_seq = []
+        s_seq = []
         for t in range(shape[0]):
             frame = video[t]  # n x c x h x w
-            e_1, e_2 = self.conv(frame)
-            e_1_seq.append(e_1)
-            e_2_seq.append(e_2)
-        e_1_seq = torch.stack(e_1_seq)  # T x n x z/2
-        e_2_seq = torch.stack(e_2_seq)  # T x n x z/2
-        return e_1_seq, e_2_seq
+            s = self.img_encoder(frame)
+            s_seq.append(s)
+        s_seq = torch.stack(s_seq)  # T x n x z
+        return s_seq
+
+    def _encode(self, s_seq):
+        T = s_seq.shape[0]  # T x n x s
+        e_seq = []
+        for t in range(T):
+            e_seq.append(self.conv(s_seq[t]))
+        e_seq = torch.stack(e_seq)  # T x n x z
+        return e_seq
 
     def _decode(self, e_seq):
-        video = []
-        for t in range(e_seq.shape[0]):
-            o = self.deconv(e_seq[t])
-            video.append(o)
-        video = torch.stack(video)
-        return video
+        T = e_seq.shape[0]
+        s_seq = []
+        for t in range(T):
+            s_seq.append(self.deconv(e_seq[t]))
+        s_seq = torch.stack(s_seq)
+        return s_seq
 
     def evaluate(self, video_i, video_n):
         T = video_i.shape[1]
@@ -195,10 +188,12 @@ class CMCModel(nn.Module):
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
         video = torch.cat([video_i, video_n], dim=1)  # T x 2n x c x h x w
 
-        e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
-        e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
+        with torch.no_grad():
+            s_seq = self._encode_video(video)  # T x 2n x s
+
+        e_seq = self._encode(s_seq)  # T x 2n x z
         h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
-        video0 = self._decode(e_seq)
+        s0_seq = self._decode(e_seq)
 
         t, c_t, nc_t = utils.context_indices(T, context_width=2)
 
@@ -217,10 +212,10 @@ class CMCModel(nn.Module):
         for i in range(T):
             l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
         l_sns /= T
-        l_frame = self.contrast_loss(torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+        l_frame = self.loss_sns(e_t, e_c_t, e_nc_t) + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_seq = self.loss_sns(h_t, h_c_t, h_nc_t)
-        l_vaes = self.loss_vae(video[:t+1], self._decode(self.lstm_dec(h_t, t+1)))
-        l_vaei = self.loss_vae(video, video0)
+        l_vaes = self.loss_vae(s_seq[:t+1], self._decode(self.lstm_dec(h_t, t+1)))
+        l_vaei = self.loss_vae(s_seq, s0_seq)
 
         loss = 0.
         loss += l_sns * 0.6
@@ -264,21 +259,11 @@ class CMCModel(nn.Module):
     def loss_sns(self, h_i, h_p, h_n):
         return F.mse_loss(h_i, h_p) + max(self.rho - F.mse_loss(h_i, h_n), 0.)
 
-    def loss_vae_seq(self, e_seq, e0_seq):
+    def loss_vae(self, e_seq, e0_seq):
         T = e_seq.shape[0]
         l = 0.
         for t in range(T):
             l += F.mse_loss(e_seq[t], e0_seq[t])
-        l /= T
-        return l
-
-    def loss_vae(self, video1, video2):
-        T = video1.shape[0]
-        l = 0.
-        for t in range(T):
-            o1 = video1[t].flatten(start_dim=1)
-            o2 = video2[t].flatten(start_dim=1)
-            l += F.mse_loss(o1, o2)
         l /= T
         return l
 

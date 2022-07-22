@@ -7,7 +7,7 @@ import torch.utils.data
 from torch import nn
 from torch.utils.data.dataset import T_co
 from torch.nn import functional as F
-
+from PIL import Image
 import utils
 
 
@@ -76,10 +76,12 @@ class CTVideoDataset(torch.utils.data.IterableDataset):
 
 class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
-    def __init__(self, root, episode_len, cam_ids, to_lab=False):
+    def __init__(self, root, episode_len, cam_ids, to_lab=False, im_w=64, im_h=64):
         self._root = Path(root)
         self._num_classes = len(list(self._root.iterdir()))
         self._files = []
+        self.im_w = im_w
+        self.im_h = im_h
 
         for c in range(self._num_classes):
             class_dir = self._root / str(c)
@@ -106,14 +108,33 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         video_i = np.load(video_i)[cam1, :self._episode_len]
         video_n = np.load(video_n)[cam2, :self._episode_len]
 
+        if tuple(video_i.shape[1:3]) != (self.im_h, self.im_w):
+            video_i = self.resize(video_i)
+        if tuple(video_n.shape[1:3]) != (self.im_h, self.im_w):
+            video_n = self.resize(video_n)
+
         if self.to_lab:
             video_i = self.rgb_to_lab(video_i)
             video_n = self.rgb_to_lab(video_n)
+        else:
+            video_i /= 255.
+            video_n /= 255.
+            video_i = utils.normalize(video_i, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+            video_n = utils.normalize(video_n, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
 
         video_i = video_i.transpose(0, 3, 1, 2).copy()
         video_n = video_n.transpose(0, 3, 1, 2).copy()
 
         return video_i, video_n
+
+    def resize(self, video):
+        frame_list = []
+        for t in range(video.shape[0]):
+            frame = Image.fromarray(video[t])
+            frame = np.array(frame.resize((self.im_w, self.im_h), Image.BICUBIC))
+            frame_list.append(frame)
+        frame_list = np.stack(frame_list)
+        return frame_list
 
     def rgb_to_lab(self, video):
         T = video.shape[0]
