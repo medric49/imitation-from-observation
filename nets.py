@@ -17,6 +17,7 @@ class EfficientNetB0Encoder(nn.Module):
         x = self.encoder.features(image)
         x = self.encoder.avgpool(x)
         x = torch.flatten(x, 1)
+        return x
 
 
 class AlexNet224(nn.Module):

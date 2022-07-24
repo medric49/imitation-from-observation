@@ -6,6 +6,7 @@ from typing import Any, NamedTuple
 import dm_env
 import numpy as np
 import torch
+from PIL import Image
 from numpy.linalg import norm
 
 import cmc_model
@@ -120,6 +121,8 @@ class FrameStackWrapper(dm_env.Environment):
         if self.to_lab:
             pixels = utils.rgb_to_lab(pixels)
         if self.normalize_img:
+            pixels = Image.fromarray(pixels)
+            pixels = np.array(pixels.resize((224, 224), Image.BICUBIC), dtype=np.float32)
             pixels /= 255.
             pixels = utils.normalize(pixels, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         return pixels.transpose(2, 0, 1).copy()
@@ -189,6 +192,8 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 if self.to_lab:
                     frame = utils.rgb_to_lab(frame)
                 else:
+                    frame = Image.fromarray(frame)
+                    frame = np.array(frame.resize((224, 224), Image.BICUBIC), dtype=np.float32)
                     frame /= 255.
                     frame = utils.normalize(frame, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                 episode.append(frame)
@@ -200,6 +205,8 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                     if self.to_lab:
                         frame = utils.rgb_to_lab(frame)
                     else:
+                        frame = Image.fromarray(frame)
+                        frame = np.array(frame.resize((224, 224), Image.BICUBIC), dtype=np.float32)
                         frame /= 255.
                         frame = utils.normalize(frame, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                     episode.append(frame)

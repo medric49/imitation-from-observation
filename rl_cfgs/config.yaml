@@ -3,8 +3,8 @@ defaults:
   - task@_global_: reacher_hard_wc
   - override hydra/launcher: submitit_local
 
-im_w: 64
-im_h: 64
+im_w: 128
+im_h: 128
 
 # task settings
 expert_frame_stack: 3
@@ -13,7 +13,7 @@ action_repeat: 2
 discount: 0.99
 # train settings
 
-episode_len: 1000 #1000
+episode_len: 50 #1000
 n_video : 10
 num_seed_frames: 4000
 # eval

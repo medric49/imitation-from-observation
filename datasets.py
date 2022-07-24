@@ -131,7 +131,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         frame_list = []
         for t in range(video.shape[0]):
             frame = Image.fromarray(video[t])
-            frame = np.array(frame.resize((self.im_w, self.im_h), Image.BICUBIC))
+            frame = np.array(frame.resize((self.im_w, self.im_h), Image.BICUBIC), dtype=np.float32)
             frame_list.append(frame)
         frame_list = np.stack(frame_list)
         return frame_list
@@ -143,7 +143,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def augment(video_i: torch.Tensor, video_n: torch.Tensor):
         T = video_i.shape[1]
-        p_list = [0.15 for i in range(T)]
+        p_list = [0.1 for i in range(T)]
         indices = [i for i in range(T) if np.random.rand() > p_list[i]]
         video_i = video_i[:, indices, :, :, :]
         video_n = video_n[:, indices, :, :, :]

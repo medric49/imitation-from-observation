@@ -209,6 +209,10 @@ class change_context:
 
 
 def normalize(data, mean, std, eps=1e-8):
+    if type(mean) == list:
+        mean = np.array(mean, dtype=np.float32)
+    if type(std) == list:
+        std = np.array(std, dtype=np.float32)
     return (data - mean) / (std + eps)
 
 

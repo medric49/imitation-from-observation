@@ -5,6 +5,7 @@ import torch
 from torch import nn
 from torch.nn import functional as F
 
+import alexnet
 import nets
 import utils
 from losses import SupConLoss
@@ -114,6 +115,7 @@ class CMCModel(nn.Module):
             nn.Linear(1280, 512),
             nn.LeakyReLU(),
             nn.Linear(512, hidden_dim),
+            alexnet.Normalize(),
         )
         self.deconv = nn.Sequential(
             nn.Linear(hidden_dim, 512),
@@ -149,15 +151,15 @@ class CMCModel(nn.Module):
         if len(shape) == 3:
             image = image.unsqueeze(0)  # 1 x c x h x w
         e = self.img_encoder(image)
-        e = self.conv(image)
+        e = self.conv(e)
         if len(shape) == 3:
             e = e.squeeze()
         return e
 
     def _encode_video(self, video):
-        shape = video.shape  # T x n x c x h x w
+        T = video.shape[0]  # T x n x c x h x w
         s_seq = []
-        for t in range(shape[0]):
+        for t in range(T):
             frame = video[t]  # n x c x h x w
             s = self.img_encoder(frame)
             s_seq.append(s)
