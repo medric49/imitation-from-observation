@@ -211,9 +211,15 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                         frame = utils.normalize(frame, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
                     episode.append(frame)
 
-            episode = np.array(episode)
-            episode = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
-            e_seq = self.encoder.encode_frame(episode)
+            T = len(episode)
+            batches = []
+            for i in range(0, T, 64):
+                batch = episode[i: i+64]
+                batch = np.array(batch)
+                batch = torch.tensor(batch.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
+                e_seq = self.encoder.encode_frame(batch)
+                batches.append(e_seq)
+            e_seq = torch.concat(batches)
             z_seq = self.encoder.encode_state_seq(e_seq)
         return e_seq.cpu().numpy(), z_seq.cpu().numpy()
 
