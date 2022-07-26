@@ -367,11 +367,8 @@ class CMCBasic(CMCModel):
 
         e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
-        h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
-        video0 = self._decode(e_seq)
 
-        h_i_seq = h_seq[:, :n, :]
-        h_n_seq = h_seq[:, n:, :]
+        video0 = self._decode(e_seq)
 
         t, c_t, nc_t = utils.context_indices(T, context_width=2)
 
@@ -379,6 +376,9 @@ class CMCBasic(CMCModel):
         e_c_t = e_seq[c_t, :n]
         e_nc_t = e_seq[nc_t, :n]
 
+        h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
+        h_i_seq = h_seq[:, :n, :]
+        h_n_seq = h_seq[:, n:, :]
         l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1])
         # l_sns = 0.
         # for i in range(T):
@@ -390,17 +390,13 @@ class CMCBasic(CMCModel):
         l_vaes = 0.
         future_len = 5
         k = random.choice(list(range(5, T - future_len)))
-
         e_seq_pred = e_seq[:k + 1, :n]
         for i in range(k, k + future_len):
-            h = self.lstm_enc(e_seq_pred)[-1]
-
+            h = self.lstm_enc(e_seq_pred)[0][-1]
             e_next_pred = self.predictor(h)
             e_next_true = e_seq[i+1, :n]
             e_neg_sample = torch.cat([e_seq[:i+1, :n], e_seq[i+2:, :n]])
-
             l_vaes += self.one_side_contrast_loss(e_next_pred, e_next_true, e_neg_sample)
-
             e_seq_pred = torch.cat([e_seq_pred, e_next_pred.unsqueeze(0)])
         l_vaes /= future_len
 
