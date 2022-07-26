@@ -4,7 +4,7 @@ train_cams: [0]
 
 exp_group: 'reacher_hard2'
 
-batch_size: 32
+batch_size: 20
 episode_len: 30
 
 num_epochs: 6001

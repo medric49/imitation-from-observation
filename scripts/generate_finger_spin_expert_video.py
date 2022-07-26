@@ -11,4 +11,4 @@ if __name__ == '__main__':
     expert = DrQV2Agent.load('experts/finger_spin.pt')
     utils.generate_video_from_expert(
         'videos/finger_spin', expert, env,
-        cam_ids=[2, 3, 4, 5, 6], num_frames=15, num_train=800, num_valid=200)
+        cam_ids=[2, 3, 4, 5, 6], ep_len=15, num=800, num_valid=200)

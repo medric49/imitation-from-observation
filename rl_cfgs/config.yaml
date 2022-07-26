@@ -13,7 +13,7 @@ action_repeat: 2
 discount: 0.99
 # train settings
 
-episode_len: 50 #1000
+episode_len: 1000
 n_video : 10
 num_seed_frames: 4000
 # eval
@@ -38,6 +38,7 @@ lr: 1e-4
 state_dim: 128  # 1024
 
 use_ct: False
+to_lab: true
 
 
 use_frame_state: true

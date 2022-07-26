@@ -73,24 +73,24 @@ class Workspace:
                                       self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                       self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                       hydra.utils.instantiate(self.cfg.context_changer),
-                                      episode_len=self.cfg.episode_len, normalize_img=True)
+                                      episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
 
             self.eval_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                      self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                      self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
                                      hydra.utils.instantiate(self.cfg.context_changer),
-                                     episode_len=self.cfg.episode_len, normalize_img=True)
+                                     episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
         else:
             self.expert_env = metaworld_env.Env(self.cfg.task_name)
             self.expert_env = dmc.wrap(self.expert_env, self.cfg.expert_frame_stack, self.cfg.action_repeat, episode_len=self.cfg.episode_len)
 
             self.train_env = metaworld_env.Env(self.cfg.task_name, self.cfg.im_w, self.cfg.im_h)
             self.train_env = dmc.wrap(self.train_env, self.cfg.frame_stack, self.cfg.action_repeat,
-                                      episode_len=self.cfg.episode_len, normalize_img=True)
+                                      episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
 
             self.eval_env = metaworld_env.Env(self.cfg.task_name, self.cfg.im_w, self.cfg.im_h)
             self.eval_env = dmc.wrap(self.eval_env, self.cfg.frame_stack, self.cfg.action_repeat,
-                                     episode_len=self.cfg.episode_len, normalize_img=True)
+                                     episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
 
         if self.cfg.use_ct:
             self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(
@@ -118,13 +118,13 @@ class Workspace:
                                                          self.cfg.context_camera_ids, self.cfg.im_w,
                                                          self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                          hydra.utils.instantiate(self.cfg.context_changer),
-                                                         dist_reward=True)
+                                                         dist_reward=True, to_lab=self.cfg.to_lab)
             self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
                                                         self.expert_env,
                                                         self.cfg.context_camera_ids, self.cfg.im_w,
                                                         self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                         hydra.utils.instantiate(self.cfg.context_changer),
-                                                        dist_reward=True)
+                                                        dist_reward=True, to_lab=self.cfg.to_lab)
 
         # create replay buffer
         data_specs = (

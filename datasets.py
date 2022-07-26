@@ -98,7 +98,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
             cam1, cam2 = 0, 0
 
         classes = list(range(self._num_classes))
-        class_1 = random.choice(classes)
+        class_1 = 0
         classes.remove(class_1)
         class_2 = random.choice(classes)
 
@@ -143,10 +143,16 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     @staticmethod
     def augment(video_i: torch.Tensor, video_n: torch.Tensor):
         T = video_i.shape[1]
-        p_list = [0.1 for i in range(T)]
+        p_list = [0.05 for i in range(T)]
         indices = [i for i in range(T) if np.random.rand() > p_list[i]]
         video_i = video_i[:, indices, :, :, :]
         video_n = video_n[:, indices, :, :, :]
+
+        # if np.random.rand() > 0.5:
+        #     T = video_n.shape[0]
+        #     indices = list(range(T))
+        #     random.shuffle(indices)
+        #     video_n = video_n[indices]
 
         return video_i, video_n
 

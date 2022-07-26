@@ -23,25 +23,25 @@ if __name__ == '__main__':
     context_changer = context_changers.ReacherHardTargetSwitcherContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'train/1', expert, env, context_changer, cam_ids=[0],
-        num_frames=ep_len, num_train=num_train)
+        ep_len=ep_len, num=num_train)
 
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher.xml')
     context_changer = context_changers.ReacherHardContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, context_changer, cam_ids=[0],
-        num_frames=ep_len, num_train=num_train)
+        ep_len=ep_len, num=num_train)
 
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher_2_targets.xml')
     context_changer = context_changers.ReacherHardTargetSwitcherContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'valid/1', expert, env, context_changer, cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid)
+        ep_len=ep_len, num=num_valid)
 
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher.xml')
     context_changer = context_changers.ReacherHardContextChanger()
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, context_changer, cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid)
+        ep_len=ep_len, num=num_valid)
 
 
 

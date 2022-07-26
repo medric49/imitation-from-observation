@@ -51,19 +51,19 @@ if __name__ == '__main__':
     im_w, im_h = 64, 64
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, context_changers.NullContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_train, im_w=im_w, im_h=im_h)
+        ep_len=ep_len, num=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, context_changers.NullContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid, im_w=im_w, im_h=im_h)
+        ep_len=ep_len, num=num_valid, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'train/1', agent, env, context_changers.NullContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_train, im_w=im_w, im_h=im_h)
+        ep_len=ep_len, num=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/1', agent, env, context_changers.NullContextChanger(), cam_ids=[0],
-        num_frames=ep_len, num_train=num_valid, im_w=im_w, im_h=im_h)
+        ep_len=ep_len, num=num_valid, im_w=im_w, im_h=im_h)
 
 
 

@@ -14,10 +14,11 @@ num_workers: 4
 same_video: false
 
 use_tb: true
+to_lab: true
 
 cmc_model:
-  _target_: cmc_model.CMCModel
-  lr: 10e-4
+  _target_: cmc_model.CMCBasic
+  lr: 1e-4
   hidden_dim: 128
   rho: 1
 

@@ -150,7 +150,7 @@ def device():
     return torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 
-def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, num_frames, num_train=800, num_valid=None, im_w=64, im_h=64):
+def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, ep_len, num=800, num_valid=None, im_w=64, im_h=64):
     root_dir = Path(root_dir)
     root_dir.mkdir(parents=True, exist_ok=True)
 
@@ -170,7 +170,7 @@ def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, 
             for cam_id, cam in cameras.items():
                 cam.append(env.physics.render(im_w, im_h, camera_id=cam_id))
 
-        for _ in range(num_frames):
+        for _ in range(ep_len):
             action = act(time_step)
             time_step = env.step(action)
 
@@ -185,14 +185,14 @@ def generate_video_from_expert(root_dir, expert, env, context_changer, cam_ids, 
         if num_valid is not None:
             video_dir = root_dir / 'train'
             video_dir.mkdir(exist_ok=True)
-            for _ in tqdm(range(num_train)):
+            for _ in tqdm(range(num)):
                 make_video(video_dir)
             video_dir = root_dir / 'valid'
             video_dir.mkdir(exist_ok=True)
             for _ in tqdm(range(num_valid)):
                 make_video(video_dir)
         else:
-            for _ in tqdm(range(num_train)):
+            for _ in tqdm(range(num)):
                 make_video(root_dir)
 
 
