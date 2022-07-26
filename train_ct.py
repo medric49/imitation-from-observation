@@ -37,8 +37,7 @@ class Workspace:
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
 
-        translator = hydra.utils.instantiate(self.cfg.translator_model)
-        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model, translator=translator).to(utils.device())
+        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model).to(utils.device())
 
         self.dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
         self.valid_dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
@@ -83,34 +82,25 @@ class Workspace:
             if eval_every_epoch(self._epoch):
                 self.context_translator.eval()
                 with torch.no_grad():
-                    eval_loss = 0
-                    eval_trans_loss = 0
-                    eval_rec_loss = 0
-                    eval_align_loss = 0
+                    metrics = None
                     for _ in range(self.cfg.num_evaluations):
                         video1, video2 = next(self.valid_dataloader_iter)
                         video1 = video1.to(device=utils.device())
                         video2 = video2.to(device=utils.device())
-                        loss, trans_loss, rec_loss, align_loss, sim_loss = self.context_translator.evaluate(video1, video2)
+                        m, _ = self.context_translator.evaluate(video1, video2)
 
-                        eval_loss += loss
-                        eval_trans_loss += trans_loss
-                        eval_rec_loss += rec_loss
-                        eval_align_loss += align_loss
+                        if metrics is None:
+                            metrics = m
+                        else:
+                            for k, v in m.items():
+                                metrics[k] += v
 
-                    eval_loss /= self.cfg.num_evaluations
-                    eval_trans_loss /= self.cfg.num_evaluations
-                    eval_rec_loss /= self.cfg.num_evaluations
-                    eval_align_loss /= self.cfg.num_evaluations
-                    metrics = {
-                        'loss': eval_loss.item(),
-                        'trans_loss': eval_trans_loss.item(),
-                        'rec_loss': eval_rec_loss.item(),
-                        'align_loss': eval_align_loss.item(),
-                    }
+                    for k, v in metrics.items():
+                        metrics[k] /= self.cfg.num_evaluations
                     self.logger.log_metrics(metrics, self._epoch, 'eval')
 
-                    print('Eval loss: ', eval_loss.item(), end='\t')
+                    eval_loss = metrics['loss']
+                    print('Eval loss: ', eval_loss, end='\t')
                     if eval_loss < self._eval_loss:
                         self._eval_loss = eval_loss
                         self.save_snapshot(as_optimal=True)

@@ -1,11 +1,11 @@
 defaults:
   - _self_
-  - task@_global_: reacher_hard
+  - task@_global_: reacher_hard2
 
 seed: 1
 
-num_epochs: 18001
-eval_every_epochs: 20
+num_epochs: 10000
+eval_every_epochs: 60
 num_evaluations: 5
 batch_size: 32
 episode_len: 30
@@ -18,16 +18,8 @@ use_tb: true
 ct_model:
   _target_: ct_model.CTNet
   lr: 10e-4
-  lambda_trans: 1.
-  lambda_rec: 1.
-  lambda_align: 1.
   hidden_dim: 1024
   use_tb: ${use_tb}
-
-translator_model:
-  _target_: ct_model.TranslatorNet
-  hidden_dim: ${ct_model.hidden_dim}
-
 
 exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
