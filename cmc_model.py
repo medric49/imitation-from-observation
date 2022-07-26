@@ -373,10 +373,6 @@ class CMCBasic(CMCModel):
 
         t, c_t, nc_t = utils.context_indices(T, context_width=2)
 
-        e_t = e_seq[t, :n]
-        e_c_t = e_seq[c_t, :n]
-        e_nc_t = e_seq[nc_t, :n]
-
         h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
         h_i_seq = h_seq[:, :n, :]
         h_n_seq = h_seq[:, n:, :]
@@ -401,9 +397,13 @@ class CMCBasic(CMCModel):
             e_seq_pred = torch.cat([e_seq_pred, e_next_pred.unsqueeze(0)])
         l_vaes /= future_len
 
+        e_t = e_seq[t]
+        e_c_t = e_seq[c_t]
+        e_nc_t = e_seq[nc_t]
         l_frame = self.contrast_loss(
             torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(
             e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+
         l_vaei = self.loss_vae_img(video, video0)
 
         loss = 0.
