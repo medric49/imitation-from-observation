@@ -376,11 +376,11 @@ class CMCBasic(CMCModel):
         h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
         h_i_seq = h_seq[:, :n, :]
         h_n_seq = h_seq[:, n:, :]
-        l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1])
-        # l_sns = 0.
-        # for i in range(T):
-        #     l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
-        # l_sns /= T
+        # l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1])
+        l_sns = 0.
+        for i in range(T):
+            l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
+        l_sns /= T
         # l_seq = self.loss_sns(h_i_seq[t], h_i_seq[c_t], h_i_seq[nc_t])
         # l_vaes = self.loss_vae(e_seq[:t + 1, :n], self.lstm_dec(h_t, t + 1))
 
