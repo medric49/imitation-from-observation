@@ -51,6 +51,7 @@ class Predictor(nn.Module):
             nn.Linear(input_size, input_size),
             nn.ReLU(inplace=True),
             nn.Linear(input_size, input_size),
+            alexnet.Normalize()
         )
 
     def forward(self, h):
@@ -62,16 +63,16 @@ class OneSideContrastLoss(nn.Module):
         super(OneSideContrastLoss, self).__init__()
         self.temperature = temperature
 
-    def forward(self, h_i, h_p, h_n_sample):
-        nb_negative = h_n_sample.shape[0]
-        h_i = h_i.unsqueeze(0)
-        h_p = h_p.unsqueeze(0)
+    def forward(self, h_i, h_p, h_n_samples):
+        nb_negative = h_n_samples.shape[0]  # nb
+        h_n_samples = h_n_samples.transpose(1, 0)  # n x nb x z
+        h_i_repeat = h_i.repeat([nb_negative, 1, 1]).transpose(1, 0)  # n x nb x z
 
-        sim_1 = torch.exp(F.cosine_similarity(h_i, h_p) * (1. / self.temperature)).sum()
-        sim_2 = torch.exp(F.cosine_similarity(h_i.repeat([nb_negative, 1]), h_n_sample) * (1. / self.temperature)).sum()
-
+        sim_1 = torch.exp(F.cosine_similarity(h_i, h_p) * (1. / self.temperature))  # n
+        sim_2 = torch.exp(F.cosine_similarity(h_i_repeat, h_n_samples, dim=2) * (1. / self.temperature))  # n x nb
+        sim_2 = sim_2.sum(dim=1)  # n
         loss = -torch.log(sim_1 / (sim_1 + sim_2))
-
+        loss = loss.sum()
         return loss
 
 
