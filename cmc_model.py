@@ -43,6 +43,20 @@ class LSTMDecoder(nn.Module):
         return e_seq
 
 
+class Predictor(nn.Module):
+    def __init__(self, input_size):
+        super(Predictor, self).__init__()
+
+        self.net = nn.Sequential(
+            nn.Linear(input_size, input_size),
+            nn.ReLU(inplace=True),
+            nn.Linear(input_size, input_size),
+        )
+
+    def forward(self, h):
+        return self.net(h)
+
+
 class OneSideContrastLoss(nn.Module):
     def __init__(self, temperature=0.07):
         super(OneSideContrastLoss, self).__init__()
@@ -324,13 +338,14 @@ class CMCBasic(CMCModel):
         self.conv = ConvNet(hidden_dim)
         self.deconv = DeconvNet(hidden_dim)
         self.lstm_enc = LSTMEncoder(hidden_dim)
-        self.lstm_dec = LSTMDecoder(hidden_dim)
+        self.predictor = Predictor(hidden_dim)
 
         self.optimizer = torch.optim.Adam(
             list(self.conv.parameters()) + list(self.deconv.parameters()) + list(self.lstm_enc.parameters()) + list(
-                self.lstm_dec.parameters()), lr)
+                self.predictor.parameters()), lr)
 
         self.contrast_loss = SupConLoss()
+        self.one_side_contrast_loss = OneSideContrastLoss()
 
     def encode_frame(self, image):
         shape = image.shape
@@ -369,30 +384,43 @@ class CMCBasic(CMCModel):
         # for i in range(T):
         #     l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
         # l_sns /= T
-        l_frame = self.contrast_loss(
-            torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(e_t, e_c_t, e_nc_t) + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
-        l_seq = self.loss_sns(h_i_seq[t], h_i_seq[c_t], h_i_seq[nc_t])
-
+        # l_seq = self.loss_sns(h_i_seq[t], h_i_seq[c_t], h_i_seq[nc_t])
         # l_vaes = self.loss_vae(e_seq[:t + 1, :n], self.lstm_dec(h_t, t + 1))
-        l_vaes = 0.
-        for i in range(T):
-            l_vaes += self.loss_vae(e_seq[:i+1, :n], self.lstm_dec(h_i_seq[i], i + 1))
-        l_vaes /= T
 
+        l_vaes = 0.
+        future_len = 5
+        k = random.choice(list(range(5, T - future_len)))
+
+        e_seq_pred = e_seq[:k + 1, :n]
+        for i in range(k, k + future_len):
+            h = self.lstm_enc(e_seq_pred)[-1]
+
+            e_next_pred = self.predictor(h)
+            e_next_true = e_seq[i+1, :n]
+            e_neg_sample = torch.cat([e_seq[:i+1, :n], e_seq[i+2:, :n]])
+
+            l_vaes += self.one_side_contrast_loss(e_next_pred, e_next_true, e_neg_sample)
+
+            e_seq_pred = torch.cat([e_seq_pred, e_next_pred.unsqueeze(0)])
+        l_vaes /= future_len
+
+        l_frame = self.contrast_loss(
+            torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(
+            e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
         l_vaei = self.loss_vae_img(video, video0)
 
         loss = 0.
-        loss += l_sns * 0.6
+        loss += l_sns * 0.4
         loss += l_frame * 0.1
-        loss += l_seq * 0.1
-        loss += l_vaes * 0.1
+        # loss += l_seq * 0.1
+        loss += l_vaes * 0.4
         loss += l_vaei * 0.1
 
         metrics = {
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_frame': l_frame.item(),
-            'l_seq': l_seq.item(),
+            # 'l_seq': l_seq.item(),
             'l_vaes': l_vaes.item(),
             'l_vaei': l_vaei.item()
         }
