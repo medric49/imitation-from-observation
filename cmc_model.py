@@ -72,7 +72,7 @@ class OneSideContrastLoss(nn.Module):
         sim_2 = torch.exp(F.cosine_similarity(h_i_repeat, h_n_samples, dim=2) * (1. / self.temperature))  # n x nb
         sim_2 = sim_2.sum(dim=1)  # n
         loss = -torch.log(sim_1 / (sim_1 + sim_2))
-        loss = loss.sum()
+        loss = loss.mean()
         return loss
 
 
