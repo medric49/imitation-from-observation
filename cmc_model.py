@@ -391,12 +391,12 @@ class CMCBasic(CMCModel):
         l_vaes = 0.
         future_len = 5
         k = random.choice(list(range(5, T - future_len)))
-        e_seq_pred = e_seq[:k + 1, :n]
+        e_seq_pred = e_seq[:k + 1]
         for i in range(k, k + future_len):
             h = self.lstm_enc(e_seq_pred)[0][-1]
             e_next_pred = self.predictor(h)
-            e_next_true = e_seq[i+1, :n]
-            e_neg_sample = torch.cat([e_seq[:i+1, :n], e_seq[i+2:, :n]])
+            e_next_true = e_seq[i+1]
+            e_neg_sample = torch.cat([e_seq[:i+1], e_seq[i+2:]])
             l_vaes += self.one_side_contrast_loss(e_next_pred, e_next_true, e_neg_sample)
             e_seq_pred = torch.cat([e_seq_pred, e_next_pred.unsqueeze(0)])
         l_vaes /= future_len
