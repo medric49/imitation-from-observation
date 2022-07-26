@@ -17,7 +17,7 @@ use_tb: true
 
 ct_model:
   _target_: ct_model.CTNet
-  lr: 10e-4
+  lr: 1e-4
   hidden_dim: 1024
   use_tb: ${use_tb}
 

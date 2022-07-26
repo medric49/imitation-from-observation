@@ -10,12 +10,8 @@ from torch.nn import functional as F
 
 
 class CTNet(nn.Module):
-    def __init__(self, hidden_dim, lr, lambda_trans, lambda_rec, lambda_align, use_tb):
+    def __init__(self, hidden_dim, lr, use_tb):
         super(CTNet, self).__init__()
-
-        self.lambda_trans = lambda_trans
-        self.lambda_rec = lambda_rec
-        self.lambda_align = lambda_align
 
         self.use_tb = use_tb
 
@@ -37,14 +33,14 @@ class CTNet(nn.Module):
         video1 = video1.unsqueeze(dim=1)
         fobs2 = fobs2.unsqueeze(dim=0)
 
-        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = [self.enc1(video1[t]) for t in range(T)]
         z1_seq = torch.stack(z1_seq)
 
-        fz2, c1, c2, c3, c4 = self.enc2(fobs2)
+        fz2 = self.enc2(fobs2)
 
         z3_seq = self.t(z1_seq, fz2)
 
-        video2 = [self.dec(z3_seq[t], c1, c2, c3, c4) for t in range(T)]  # T x c x h x w
+        video2 = [self.dec(z3_seq[t]) for t in range(T)]  # T x c x h x w
         video2 = torch.stack(video2)
 
         z3_seq = z3_seq.squeeze(dim=1)
@@ -72,19 +68,19 @@ class CTNet(nn.Module):
         l_rec = 0
         l_align = 0
 
-        fz2, c1, c2, c3, c4 = self.enc2(fobs2)
+        fz2 = self.enc2(fobs2)
 
-        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
+        z1_seq = [self.enc1(video1[t]) for t in range(T)]
         z1_seq = torch.stack(z1_seq)
         z3_seq = self.t(z1_seq, fz2)
 
-        z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
+        z2_seq = [self.enc1(video2[t]) for t in range(T)]
         z2_seq = torch.stack(z2_seq)
 
         for t in range(T):
             obs2 = video2[t]
-            obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
-            obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
+            obs_z3 = self.dec(z3_seq[t])
+            obs_z2 = self.dec(z2_seq[t])
 
             l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1))
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))
@@ -123,7 +119,7 @@ class CTNet(nn.Module):
 
     def encode(self, obs):
         obs = obs.to(dtype=torch.float) / 255.
-        obs, _, _, _, _ = self.enc1(obs)
+        obs = self.enc1(obs)
         return obs
 
     @staticmethod
