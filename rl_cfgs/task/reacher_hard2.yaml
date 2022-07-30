@@ -14,4 +14,4 @@ learner_camera_id: 0
 exp_group: reacher_hard2
 
 context_changer:
-  _target_: context_changers.ReacherHardContextChanger
+  _target_: context_changers.ReacherHardWCContextChanger

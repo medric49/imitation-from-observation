@@ -3,8 +3,8 @@ defaults:
   - task@_global_: reacher_hard_wc
   - override hydra/launcher: submitit_local
 
-im_w: 128
-im_h: 128
+im_w: 64
+im_h: 64
 
 # task settings
 expert_frame_stack: 3

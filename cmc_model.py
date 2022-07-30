@@ -64,6 +64,10 @@ class OneSideContrastLoss(nn.Module):
         self.temperature = temperature
 
     def forward(self, h_i, h_p, h_n_samples):
+        if len(h_i.shape) == 1:
+            h_i = h_i.unsqueeze(0)  # 1 x z
+            h_p = h_p.unsqueeze(0)  # 1 x z
+            h_n_samples = h_n_samples.unsqueeze(1)  # nb x 1 x z
         nb_negative = h_n_samples.shape[0]  # nb
         h_n_samples = h_n_samples.transpose(1, 0)  # n x nb x z
         h_i_repeat = h_i.repeat([nb_negative, 1, 1]).transpose(1, 0)  # n x nb x z
@@ -100,8 +104,9 @@ class HalfConvNet(nn.Module):
         e = self.leaky_relu(self.b_norm_3(self.conv_3(e)))
         e = self.leaky_relu(self.b_norm_4(self.conv_4(e)))
         e = self.leaky_relu(self.b_norm_fc_1(self.fc1(e)))
-        e = self.norm(self.fc2(e))
+        e = self.fc2(e)
         e = e.view(e.shape[0], e.shape[1])
+        e = self.norm(e)
         return e
 
 
@@ -376,7 +381,12 @@ class CMCBasic(CMCModel):
         h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
         h_i_seq = h_seq[:, :n, :]
         h_n_seq = h_seq[:, n:, :]
-        l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1])
+        l_sns = 0.
+        for i in range(n):
+            j = (i + 1) % n
+            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
+        l_sns /= n
+        # l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1]) + self.loss_sns(h_n_seq[-1], h_n_seq[-1][list(range(1, n)) + [0]], h_i_seq[-1])
         # l_sns = 0.
         # for i in range(T):
         #     l_sns += self.loss_sns(h_i_seq[i], h_i_seq[i][list(range(1, n)) + [0]], h_n_seq[i])
@@ -385,8 +395,8 @@ class CMCBasic(CMCModel):
         # l_vaes = self.loss_vae(e_seq[:t + 1, :n], self.lstm_dec(h_t, t + 1))
 
         l_vaes = 0.
-        future_len = 5
-        k = random.choice(list(range(5, T - future_len)))
+        future_len = 2
+        k = random.randint(5, T - future_len - 1)
         e_seq_pred = e_seq[:k + 1]
         for i in range(k, k + future_len):
             h = self.lstm_enc(e_seq_pred)[0][-1]
@@ -402,7 +412,7 @@ class CMCBasic(CMCModel):
         e_nc_t = e_seq[nc_t]
         l_frame = self.contrast_loss(
             torch.stack([e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)], dim=1)) + self.loss_sns(
-            e_t, e_c_t, e_nc_t)  # + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
+            e_t, e_c_t, e_nc_t) + self.contrast_loss(torch.stack([e_t, e_c_t], dim=1))
 
         l_vaei = self.loss_vae_img(video, video0)
 
