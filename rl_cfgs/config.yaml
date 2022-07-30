@@ -14,7 +14,6 @@ discount: 0.99
 # train settings
 
 episode_len: 1000
-n_video : 10
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
@@ -37,7 +36,6 @@ experiment: exp
 lr: 1e-4
 state_dim: 128  # 1024
 
-use_ct: False
 to_lab: true
 
 

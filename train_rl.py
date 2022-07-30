@@ -1,6 +1,8 @@
 import warnings
+import time
 
 import cmc_model
+import datasets
 import metaworld_env
 import virl_model
 
@@ -16,8 +18,6 @@ import torch.utils.data
 from dm_env import specs
 from hydra.utils import to_absolute_path
 
-import context_changers
-import ct_model
 import dmc
 import drqv2
 import rl_model
@@ -51,6 +51,16 @@ class Workspace:
         self.expert.train(training=False)
 
         self.setup()
+
+        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len,
+                                                 self.cfg.train_cams, to_lab=self.cfg.to_lab)
+        self.dataloader = torch.utils.data.DataLoader(
+            self.dataset,
+            batch_size=self.cfg.enc_batch_size,
+            num_workers=self.cfg.replay_buffer_num_workers,
+            worker_init_fn=_worker_init_fn,
+        )
+        self.dataloader_iter = iter(self.dataloader)
 
         self.cfg.agent.action_shape = self.train_env.action_spec().shape
         self.cfg.agent.state_dim = self.train_env.observation_spec().shape[0]
@@ -92,39 +102,21 @@ class Workspace:
             self.eval_env = dmc.wrap(self.eval_env, self.cfg.frame_stack, self.cfg.action_repeat,
                                      episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
 
-        if self.cfg.use_ct:
-            self.context_translator: ct_model.CTNet = ct_model.CTNet.load(to_absolute_path(self.cfg.ct_file)).to(
-                utils.device())
-            self.context_translator.eval()
-            self.train_env = dmc.CTEncoderStackWrapper(self.train_env, self.expert, self.context_translator,
-                                                       self.expert_env,
-                                                       self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                       self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                       hydra.utils.instantiate(self.cfg.context_changer),
-                                                       dist_reward=True)
-            self.eval_env = dmc.CTEncoderStackWrapper(self.eval_env, self.expert, self.context_translator,
-                                                      self.expert_env,
-                                                      self.cfg.context_camera_ids, self.cfg.n_video, self.cfg.im_w,
-                                                      self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                      hydra.utils.instantiate(self.cfg.context_changer),
-                                                      dist_reward=False)
-        else:
-            # self.encoder: virl_model.ViRLNet = virl_model.ViRLNet.load(to_absolute_path(self.cfg.virl_file)).to(utils.device())
-            self.encoder: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
-                utils.device())
-            self.encoder.eval()
-            self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
-                                                         self.expert_env,
-                                                         self.cfg.context_camera_ids, self.cfg.im_w,
-                                                         self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                         hydra.utils.instantiate(self.cfg.context_changer),
-                                                         dist_reward=True, to_lab=self.cfg.to_lab)
-            self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
-                                                        self.expert_env,
-                                                        self.cfg.context_camera_ids, self.cfg.im_w,
-                                                        self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                        hydra.utils.instantiate(self.cfg.context_changer),
-                                                        dist_reward=True, to_lab=self.cfg.to_lab)
+        self.encoder: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
+            utils.device())
+        self.encoder.eval()
+        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
+                                                     self.expert_env,
+                                                     self.cfg.train_cams, self.cfg.im_w,
+                                                     self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                     hydra.utils.instantiate(self.cfg.context_changer),
+                                                     dist_reward=True, to_lab=self.cfg.to_lab)
+        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
+                                                    self.expert_env,
+                                                    self.cfg.train_cams, self.cfg.im_w,
+                                                    self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                    hydra.utils.instantiate(self.cfg.context_changer),
+                                                    dist_reward=True, to_lab=self.cfg.to_lab)
 
         # create replay buffer
         data_specs = (
@@ -204,13 +196,13 @@ class Workspace:
                                       self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
-
+        frame_sequence = [[]]
         time_step = self.train_env.reset()
-
         self.replay_storage.add(time_step)
-        frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h,
-                                              camera_id=self.cfg.learner_camera_id).transpose((2, 0, 1))
-        self.train_video_recorder.init(frame)
+
+        frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
+        frame_sequence[0].append(frame)
+        self.train_video_recorder.init(frame.transpose((2, 0, 1)))
 
         metrics = None
         while train_until_step(self.global_step):
@@ -233,43 +225,53 @@ class Workspace:
                         log('buffer_size', len(self.replay_storage))
                         log('step', self.global_step)
 
-                # try to evaluate
-                if eval_every_step(self.global_step):
-                    self.logger.log('eval_total_time', self.timer.total_time(),
-                                    self.global_frame)
-                    self.eval()
+                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
+                np.save(to_absolute_path(f'{self.cfg.train_video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
 
                 # reset env
+                frame_sequence = [[]]
                 time_step = self.train_env.reset()
-                frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h,
-                                                      camera_id=self.cfg.learner_camera_id).transpose((2, 0, 1))
-
                 self.replay_storage.add(time_step)
-                self.train_video_recorder.init(frame)
+
+                frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
+                frame_sequence[0].append(frame)
+                self.train_video_recorder.init(frame.transpose((2, 0, 1)))
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
-
                 episode_step = 0
                 episode_reward = 0
+
+            # try to evaluate
+            if eval_every_step(self.global_step):
+                self.logger.log('eval_total_time', self.timer.total_time(),
+                                self.global_frame)
+                self.eval()
 
             # sample action
             with torch.no_grad(), utils.eval_mode(self.rl_agent):
                 state = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
                 action = self.rl_agent.act(state, self.global_step, eval_mode=False)
 
-            # try to update the agent
+            # try to update the encoder and the agent
             if not seed_until_step(self.global_step):
-                metrics = self.rl_agent.update(self.replay_iter, self.global_step)
+                video_i, video_n = next(self.dataloader_iter)
+                video_i = video_i.to(device=utils.device(), dtype=torch.float)
+                video_n = video_n.to(device=utils.device(), dtype=torch.float)
+                video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
+                metrics = self.encoder.update(video_i, video_n)
+
+                metrics_tmp = self.rl_agent.update(self.replay_iter, self.global_step)
+                metrics.update(metrics_tmp)
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
 
             # take env step
             time_step = self.train_env.step(action)
-            frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h,
-                                                  camera_id=self.cfg.learner_camera_id).transpose((2, 0, 1))
-
             self.replay_storage.add(time_step)
-            self.train_video_recorder.record(frame)
+
+            frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
+            frame_sequence[0].append(frame)
+            self.train_video_recorder.record(frame.transpose((2, 0, 1)))
 
             episode_reward += time_step.reward
             episode_step += 1

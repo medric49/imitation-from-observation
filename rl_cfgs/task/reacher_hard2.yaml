@@ -8,8 +8,15 @@ expert_file: experts/reacher_hard.pt
 cmc_file: cmc_exp_local/reacher_hard2/1/snapshot.pt
 xml_path: domain_xmls/reacher2.xml
 
-context_camera_ids: [0]
+train_cams: [0]
 learner_camera_id: 0
+
+train_video_dir: 'videos/reacher_hard2/train'
+
+
+enc_batch_size: 32
+episode_len: 30
+
 
 exp_group: reacher_hard2
 

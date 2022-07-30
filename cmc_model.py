@@ -175,6 +175,7 @@ class CMCModel(nn.Module):
         raise NotImplementedError
 
     def update(self, *args, **kwargs):
+        self.train()
         self.optimizer.zero_grad()
 
         metrics, loss = self.evaluate(*args, **kwargs)
@@ -186,6 +187,7 @@ class CMCModel(nn.Module):
         loss.backward()
 
         self.optimizer.step()
+        self.eval()
         return metrics
 
     def loss_sns(self, h_i, h_p, h_n):
