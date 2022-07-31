@@ -57,8 +57,6 @@ class Workspace:
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
             batch_size=self.cfg.enc_batch_size,
-            num_workers=self.cfg.replay_buffer_num_workers,
-            worker_init_fn=_worker_init_fn,
         )
         self.dataloader_iter = iter(self.dataloader)
 
@@ -210,6 +208,18 @@ class Workspace:
                 self._global_episode += 1
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
 
+                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
+                np.save(to_absolute_path(f'{self.cfg.train_video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
+                self.dataset.update_files()
+
+                if not seed_until_step(self.global_step):
+                    video_i, video_n = next(self.dataloader_iter)
+                    video_i = video_i.to(device=utils.device(), dtype=torch.float)
+                    video_n = video_n.to(device=utils.device(), dtype=torch.float)
+                    video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
+                    enc_metrics = self.encoder.update(video_i, video_n)
+                    self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
+
                 # wait until all the metrics schema is populated
                 if metrics is not None:
                     # log stats
@@ -224,9 +234,6 @@ class Workspace:
                         log('episode', self.global_episode)
                         log('buffer_size', len(self.replay_storage))
                         log('step', self.global_step)
-
-                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
-                np.save(to_absolute_path(f'{self.cfg.train_video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
 
                 # reset env
                 frame_sequence = [[]]
@@ -255,14 +262,7 @@ class Workspace:
 
             # try to update the encoder and the agent
             if not seed_until_step(self.global_step):
-                video_i, video_n = next(self.dataloader_iter)
-                video_i = video_i.to(device=utils.device(), dtype=torch.float)
-                video_n = video_n.to(device=utils.device(), dtype=torch.float)
-                video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
-                metrics = self.encoder.update(video_i, video_n)
-
-                metrics_tmp = self.rl_agent.update(self.replay_iter, self.global_step)
-                metrics.update(metrics_tmp)
+                metrics = self.rl_agent.update(self.replay_iter, self.global_step)
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
 
             # take env step

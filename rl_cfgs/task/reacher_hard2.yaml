@@ -14,7 +14,7 @@ learner_camera_id: 0
 train_video_dir: 'videos/reacher_hard2/train'
 
 
-enc_batch_size: 32
+enc_batch_size: 16
 episode_len: 30
 
 

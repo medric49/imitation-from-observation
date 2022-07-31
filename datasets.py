@@ -80,15 +80,17 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
     def __init__(self, root, episode_len, cam_ids, to_lab=False, im_w=64, im_h=64):
         self._root = Path(root)
         self._num_classes = len(list(self._root.iterdir()))
-        self._files = []
+
         self.im_w = im_w
         self.im_h = im_h
+        self.update_files()
 
         self._episode_len = episode_len
         self._cam_ids = cam_ids
         self.to_lab = to_lab
 
-    def _update_files(self):
+    def update_files(self):
+        self._files = []
         for c in range(self._num_classes):
             class_dir = self._root / str(c)
             files = list(sorted(class_dir.iterdir()))
@@ -100,8 +102,6 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
             self._files.append(files)
 
     def _sample(self):
-        self._update_files()
-
         if len(self._cam_ids) > 1:
             cam1, cam2 = random.sample(self._cam_ids, k=3)
         else:
