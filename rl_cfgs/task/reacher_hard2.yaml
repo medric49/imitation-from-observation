@@ -11,7 +11,7 @@ xml_path: domain_xmls/reacher2.xml
 train_cams: [0]
 learner_camera_id: 0
 
-train_video_dir: 'videos/reacher_hard2/train'
+video_dir: 'videos/reacher_hard2/exp'
 
 
 enc_batch_size: 16

@@ -172,6 +172,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.dist_reward = dist_reward
         self.to_lab = to_lab
 
+        self.expert_frames = None
         self.expert_states = None
         self.expert_seq_states = None
         self.agent_states = None
@@ -186,9 +187,11 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             cam_id = random.choice(self.context_camera_ids)
 
             time_step = self.expert_env.reset()
+            expert_frames = []
             episode = []
             with utils.change_context(self.expert_env, self.context_changer):
                 frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
+                expert_frames.append(frame)
                 if self.to_lab:
                     frame = utils.rgb_to_lab(frame)
                 else:
@@ -202,6 +205,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 time_step = self.expert_env.step(action)
                 with utils.change_context(self.expert_env, self.context_changer):
                     frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
+                    expert_frames.append(frame)
                     if self.to_lab:
                         frame = utils.rgb_to_lab(frame)
                     else:
@@ -220,9 +224,10 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 e_seq = self.encoder.encode_frame(batch)
                 del batch
                 batches.append(e_seq)
+            expert_frames = np.array(expert_frames, dtype=np.uint8)
             e_seq = torch.concat(batches)
             z_seq = self.encoder.encode_state_seq(e_seq)
-        return e_seq.cpu().numpy(), z_seq.cpu().numpy()
+        return expert_frames, e_seq.cpu().numpy(), z_seq.cpu().numpy()
 
     def encode(self, observation):
         frame = observation[-self.init_channel:]
@@ -233,7 +238,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         return state
 
     def reset(self) -> TimeStep:
-        self.expert_states, self.expert_seq_states = self.make_expert_states()
+        self.expert_frames, self.expert_states, self.expert_seq_states = self.make_expert_states()
         self.agent_states = []
         self.agent_seq_states = []
 

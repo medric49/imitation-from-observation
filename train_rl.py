@@ -50,9 +50,11 @@ class Workspace:
         self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
         self.expert.train(training=False)
 
+        Path(to_absolute_path(self.cfg.video_dir)).mkdir(exist_ok=True, parents=True)
+
         self.setup()
 
-        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len,
+        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.video_dir), self.cfg.episode_len,
                                                  self.cfg.train_cams, to_lab=self.cfg.to_lab)
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -196,6 +198,7 @@ class Workspace:
         episode_step, episode_reward = 0, 0
         frame_sequence = [[]]
         time_step = self.train_env.reset()
+        np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'), self.train_env.expert_frames)
         self.replay_storage.add(time_step)
 
         frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
@@ -209,7 +212,7 @@ class Workspace:
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
 
                 frame_sequence = np.array(frame_sequence, dtype=np.uint8)
-                np.save(to_absolute_path(f'{self.cfg.train_video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
+                np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
                 self.dataset.update_files()
 
                 if not seed_until_step(self.global_step):
@@ -238,6 +241,8 @@ class Workspace:
                 # reset env
                 frame_sequence = [[]]
                 time_step = self.train_env.reset()
+                np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'),
+                        self.train_env.expert_frames)
                 self.replay_storage.add(time_step)
 
                 frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
