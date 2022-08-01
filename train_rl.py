@@ -111,12 +111,12 @@ class Workspace:
         self.encoder: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
             utils.device())
         self.encoder.eval()
+        self.encoder.deactivate_state_update()
         self.encoder_target: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
             utils.device())
         self.encoder_target.eval()
         for param in self.encoder_target.parameters():
             param.requires_grad = False
-
 
         self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder_target,
                                                      self.expert_env,

@@ -230,12 +230,16 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         return expert_frames, e_seq.cpu().numpy(), z_seq.cpu().numpy()
 
     def encode(self, observation):
-        frame = observation[-self.init_channel:]
+        frames = []
+        for i in range(self.frame_stack):
+            frames.append(observation[self.init_channel * i: self.init_channel * (i+1)])
+        frames = np.array(frames, dtype=np.float)
         with torch.no_grad():
-            frame = torch.tensor(frame, device=utils.device(), dtype=torch.float)
-            state = self.encoder.encode_frame(frame)
-            state = state.cpu().numpy()
-        return state
+            frames = torch.tensor(frames, device=utils.device(), dtype=torch.float)
+            states = self.encoder.encode_frame(frames)
+            states = torch.flatten(states)
+            states = states.cpu().numpy()
+        return states
 
     def reset(self) -> TimeStep:
         self.expert_frames, self.expert_states, self.expert_seq_states = self.make_expert_states()
@@ -251,9 +255,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
             h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
             self.agent_seq_states.append(h)
-            h_target = self.expert_seq_states[self.step_id+1]
-            state = np.concatenate([s, h, h_target])
-        return time_step._replace(observation=state, reward=0.)
+        return time_step._replace(observation=s, reward=0.)
 
     def step(self, action) -> TimeStep:
         time_step = self._env.step(action)
@@ -265,27 +267,20 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
             h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
             self.agent_seq_states.append(h)
-            if time_step.last():
-                h_target = self.expert_seq_states[self.step_id]
-            else:
-                h_target = self.expert_seq_states[self.step_id + 1]
-            state = np.concatenate([s, h, h_target])
 
         if self.dist_reward:
             reward_1 = 0
             reward_2 = 0
             h_1 = self.expert_seq_states[self.step_id]
             reward_1 += -np.linalg.norm(h_1 - h)
-            # s_1 = self.expert_states[self.step_id]
-            # reward_2 += -np.linalg.norm(s_1 - s)
             reward = reward_1 + reward_2
         else:
             reward = time_step.reward
 
-        return time_step._replace(observation=state, reward=reward)
+        return time_step._replace(observation=s, reward=reward)
 
     def observation_spec(self):
-        state_dim = self.state_dim * self.frame_stack + self.state_dim*2
+        state_dim = self.state_dim * self.frame_stack
         return specs.Array(shape=(state_dim,), dtype=np.float32, name='observation')
 
     def action_spec(self):

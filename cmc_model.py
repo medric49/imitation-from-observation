@@ -174,6 +174,9 @@ class CMCModel(nn.Module):
     def evaluate(self, *args, **kwargs):
         raise NotImplementedError
 
+    def deactivate_state_update(self):
+        raise NotImplementedError
+
     def update(self, *args, **kwargs):
         self.train()
         self.optimizer.zero_grad()
@@ -354,6 +357,10 @@ class CMCBasic(CMCModel):
 
         self.contrast_loss = SupConLoss()
         self.one_side_contrast_loss = OneSideContrastLoss()
+
+    def deactivate_state_update(self):
+        for param in self.conv.parameters():
+            param.requires_grad = False
 
     def encode_frame(self, image):
         shape = image.shape
