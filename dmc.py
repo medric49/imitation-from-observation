@@ -224,7 +224,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
                 e_seq = self.encoder.encode_frame(batch)
                 del batch
                 batches.append(e_seq)
-            expert_frames = np.array(expert_frames, dtype=np.uint8)
+            expert_frames = np.array([expert_frames], dtype=np.uint8)
             e_seq = torch.concat(batches)
             z_seq = self.encoder.encode_state_seq(e_seq)
         return expert_frames, e_seq.cpu().numpy(), z_seq.cpu().numpy()

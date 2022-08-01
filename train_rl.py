@@ -1,3 +1,5 @@
+import os
+import shutil
 import warnings
 import time
 
@@ -50,7 +52,11 @@ class Workspace:
         self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
         self.expert.train(training=False)
 
-        Path(to_absolute_path(self.cfg.video_dir)).mkdir(exist_ok=True, parents=True)
+        video_dir = Path(to_absolute_path(self.cfg.video_dir))
+        if video_dir.exists():
+            shutil.rmtree(video_dir)
+        Path(video_dir / '0').mkdir(exist_ok=True, parents=True)
+        Path(video_dir / '1').mkdir(exist_ok=True, parents=True)
 
         self.setup()
 
@@ -194,6 +200,7 @@ class Workspace:
                                       self.cfg.action_repeat)
         eval_every_step = utils.Every(self.cfg.eval_every_frames,
                                       self.cfg.action_repeat)
+        train_encoder_every_step = utils.Every(self.cfg.train_encoder_every_steps, self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
         frame_sequence = [[]]
@@ -211,18 +218,6 @@ class Workspace:
                 self._global_episode += 1
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
 
-                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
-                np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
-                self.dataset.update_files()
-
-                if not seed_until_step(self.global_step):
-                    video_i, video_n = next(self.dataloader_iter)
-                    video_i = video_i.to(device=utils.device(), dtype=torch.float)
-                    video_n = video_n.to(device=utils.device(), dtype=torch.float)
-                    video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
-                    enc_metrics = self.encoder.update(video_i, video_n)
-                    self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
-
                 # wait until all the metrics schema is populated
                 if metrics is not None:
                     # log stats
@@ -239,11 +234,14 @@ class Workspace:
                         log('step', self.global_step)
 
                 # reset env
-                frame_sequence = [[]]
                 time_step = self.train_env.reset()
+                self.replay_storage.add(time_step)
                 np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'),
                         self.train_env.expert_frames)
-                self.replay_storage.add(time_step)
+                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
+                np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
+                frame_sequence = [[]]
+                self.dataset.update_files()
 
                 frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
                 frame_sequence[0].append(frame)
@@ -265,7 +263,16 @@ class Workspace:
                 state = torch.tensor(time_step.observation, device=utils.device(), dtype=torch.float)
                 action = self.rl_agent.act(state, self.global_step, eval_mode=False)
 
-            # try to update the encoder and the agent
+            # try to update the encoder
+            if not seed_until_step(self.global_step) and train_encoder_every_step(self.global_step):
+                video_i, video_n = next(self.dataloader_iter)
+                video_i = video_i.to(device=utils.device(), dtype=torch.float)
+                video_n = video_n.to(device=utils.device(), dtype=torch.float)
+                video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
+                enc_metrics = self.encoder.update(video_i, video_n)
+                self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
+
+            # try to update the agent
             if not seed_until_step(self.global_step):
                 metrics = self.rl_agent.update(self.replay_iter, self.global_step)
                 self.logger.log_metrics(metrics, self.global_frame, ty='train')
