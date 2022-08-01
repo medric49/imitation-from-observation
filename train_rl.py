@@ -111,13 +111,20 @@ class Workspace:
         self.encoder: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
             utils.device())
         self.encoder.eval()
-        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
+        self.encoder_target: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
+            utils.device())
+        self.encoder_target.eval()
+        for param in self.encoder_target.parameters():
+            param.requires_grad = False
+
+
+        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder_target,
                                                      self.expert_env,
                                                      self.cfg.train_cams, self.cfg.im_w,
                                                      self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                      hydra.utils.instantiate(self.cfg.context_changer),
                                                      dist_reward=True, to_lab=self.cfg.to_lab)
-        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
+        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder_target,
                                                     self.expert_env,
                                                     self.cfg.train_cams, self.cfg.im_w,
                                                     self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
@@ -270,6 +277,7 @@ class Workspace:
                 video_n = video_n.to(device=utils.device(), dtype=torch.float)
                 video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
                 enc_metrics = self.encoder.update(video_i, video_n)
+                utils.soft_update_params(self.encoder, self.encoder_target, self.cfg.critic_target_tau)
                 self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
 
             # try to update the agent

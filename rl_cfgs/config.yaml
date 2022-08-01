@@ -17,7 +17,8 @@ episode_len: 1000
 num_seed_frames: 4000
 # eval
 eval_every_frames: 10000
-train_encoder_every_steps: 1000
+train_encoder_every_steps: 100
+critic_target_tau: 0.01
 num_eval_episodes: 5
 # snapshot
 save_snapshot: true
