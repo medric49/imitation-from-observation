@@ -393,7 +393,7 @@ class CMCBasic(CMCModel):
         l_sns = 0.
         for i in range(n):
             j = (i + 1) % n
-            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
+            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) # + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
         l_sns /= n
         # l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1]) + self.loss_sns(h_n_seq[-1], h_n_seq[-1][list(range(1, n)) + [0]], h_i_seq[-1])
         # l_sns = 0.
