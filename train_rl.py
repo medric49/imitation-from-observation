@@ -112,19 +112,19 @@ class Workspace:
             utils.device())
         self.encoder.eval()
         self.encoder.deactivate_state_update()
-        self.encoder_target: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
-            utils.device())
-        self.encoder_target.eval()
-        for param in self.encoder_target.parameters():
-            param.requires_grad = False
+        # self.encoder_target: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
+        #     utils.device())
+        # self.encoder_target.eval()
+        # for param in self.encoder_target.parameters():
+        #     param.requires_grad = False
 
-        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder_target,
+        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
                                                      self.expert_env,
                                                      self.cfg.train_cams, self.cfg.im_w,
                                                      self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                      hydra.utils.instantiate(self.cfg.context_changer),
                                                      dist_reward=True, to_lab=self.cfg.to_lab)
-        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder_target,
+        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
                                                     self.expert_env,
                                                     self.cfg.train_cams, self.cfg.im_w,
                                                     self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
@@ -207,7 +207,8 @@ class Workspace:
                                       self.cfg.action_repeat)
         eval_every_step = utils.Every(self.cfg.eval_every_frames,
                                       self.cfg.action_repeat)
-        train_encoder_every_step = utils.Every(self.cfg.train_encoder_every_steps, self.cfg.action_repeat)
+        train_encoder_every_step = utils.Every(self.cfg.train_encoder_every_frames, self.cfg.action_repeat)
+        train_encoder_until_step = utils.Until(self.cfg.num_encoder_train_frames, self.cfg.action_repeat)
 
         episode_step, episode_reward = 0, 0
         frame_sequence = [[]]
@@ -248,7 +249,7 @@ class Workspace:
                 frame_sequence = np.array(frame_sequence, dtype=np.uint8)
                 np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
                 frame_sequence = [[]]
-                self.dataset.update_files()
+                self.dataset.update_files(max_num_video=self.cfg.max_num_encoder_videos)
 
                 frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
                 frame_sequence[0].append(frame)
@@ -271,13 +272,13 @@ class Workspace:
                 action = self.rl_agent.act(state, self.global_step, eval_mode=False)
 
             # try to update the encoder
-            if not seed_until_step(self.global_step) and train_encoder_every_step(self.global_step):
+            if not seed_until_step(self.global_step) and train_encoder_every_step(self.global_step) and train_encoder_until_step(self.global_step):
                 video_i, video_n = next(self.dataloader_iter)
                 video_i = video_i.to(device=utils.device(), dtype=torch.float)
                 video_n = video_n.to(device=utils.device(), dtype=torch.float)
                 video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
-                enc_metrics = self.encoder.update(video_i, video_n)
-                utils.soft_update_params(self.encoder, self.encoder_target, self.cfg.critic_target_tau)
+                enc_metrics = self.encoder.update(video_i, video_n, seq_only=True)
+                # utils.soft_update_params(self.encoder, self.encoder_target, self.cfg.critic_target_tau)
                 self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
 
             # try to update the agent

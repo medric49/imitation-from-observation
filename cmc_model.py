@@ -177,11 +177,20 @@ class CMCModel(nn.Module):
     def deactivate_state_update(self):
         raise NotImplementedError
 
+    def evaluate_seq_encoder(self, *args, **kwargs):
+        raise NotImplementedError
+
     def update(self, *args, **kwargs):
+        seq_only = kwargs.get('seq_only', False)
+
         self.train()
         self.optimizer.zero_grad()
 
-        metrics, loss = self.evaluate(*args, **kwargs)
+        if not seq_only:
+            metrics, loss = self.evaluate(*args, **kwargs)
+        else:
+            metrics, loss = self.evaluate_seq_encoder(*args, **kwargs)
+
         loss = torch.nan_to_num(loss, -1)
         if loss.item() == -1:
             print('***')
@@ -372,7 +381,52 @@ class CMCBasic(CMCModel):
             e = e.squeeze()
         return e
 
-    def evaluate(self, video_i, video_n):
+    def evaluate_seq_encoder(self, video_i, video_n, *args, **kwargs):
+        T = video_i.shape[1]
+        n = video_i.shape[0]
+
+        video_i = torch.transpose(video_i, dim0=0, dim1=1)  # T x n x c x h x w
+        video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
+        video = torch.cat([video_i, video_n], dim=1)  # T x 2n x c x h x w
+
+        e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
+        e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
+
+        h_seq, hidden = self.lstm_enc(e_seq)  # T x 2n x z
+        h_i_seq = h_seq[:, :n, :]
+        h_n_seq = h_seq[:, n:, :]
+        l_sns = 0.
+        for i in range(n):
+            j = (i + 1) % n
+            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
+        l_sns /= n
+
+        l_vaes = 0.
+        future_len = 2
+        k = random.randint(5, T - future_len - 1)
+        e_seq_pred = e_seq[:k + 1]
+        for i in range(k, k + future_len):
+            h = self.lstm_enc(e_seq_pred)[0][-1]
+            e_next_pred = self.predictor(h)
+            e_next_true = e_seq[i + 1]
+            e_neg_sample = torch.cat([e_seq[:i + 1], e_seq[i + 2:]])
+            l_vaes += self.one_side_contrast_loss(e_next_pred, e_next_true, e_neg_sample)
+            e_seq_pred = torch.cat([e_seq_pred, e_next_pred.unsqueeze(0)])
+        l_vaes /= future_len
+
+        loss = 0.
+        loss += l_sns * 0.5
+        loss += l_vaes * 0.5
+
+        metrics = {
+            'loss': loss.item(),
+            'l_sns': l_sns.item(),
+            'l_vaes': l_vaes.item(),
+        }
+
+        return metrics, loss
+
+    def evaluate(self, video_i, video_n, *args, **kwargs):
         T = video_i.shape[1]
         n = video_i.shape[0]
 
@@ -393,7 +447,7 @@ class CMCBasic(CMCModel):
         l_sns = 0.
         for i in range(n):
             j = (i + 1) % n
-            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) # + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
+            l_sns += self.one_side_contrast_loss(h_i_seq[-1, i], h_i_seq[-1, j], h_n_seq[-1]) + self.one_side_contrast_loss(h_n_seq[-1, i], h_n_seq[-1, j], h_i_seq[-1])
         l_sns /= n
         # l_sns = self.loss_sns(h_i_seq[-1], h_i_seq[-1][list(range(1, n)) + [0]], h_n_seq[-1]) + self.loss_sns(h_n_seq[-1], h_n_seq[-1][list(range(1, n)) + [0]], h_i_seq[-1])
         # l_sns = 0.
@@ -428,7 +482,6 @@ class CMCBasic(CMCModel):
         loss = 0.
         loss += l_sns * 0.4
         loss += l_frame * 0.1
-        # loss += l_seq * 0.1
         loss += l_vaes * 0.4
         loss += l_vaei * 0.1
 
@@ -436,7 +489,6 @@ class CMCBasic(CMCModel):
             'loss': loss.item(),
             'l_sns': l_sns.item(),
             'l_frame': l_frame.item(),
-            # 'l_seq': l_seq.item(),
             'l_vaes': l_vaes.item(),
             'l_vaei': l_vaei.item()
         }

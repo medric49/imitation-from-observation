@@ -89,12 +89,12 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         self._cam_ids = cam_ids
         self.to_lab = to_lab
 
-    def update_files(self):
+    def update_files(self, max_num_video=None):
         self._files = []
         for c in range(self._num_classes):
             class_dir = self._root / str(c)
             files = list(sorted(class_dir.iterdir()))
-            if len(files) > 20000:
+            if max_num_video is not None and len(files) > max_num_video:
                 old_files = files[:-20000]
                 files = files[-20000:]
                 for f in old_files:

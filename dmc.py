@@ -251,7 +251,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         with torch.no_grad():
             s = self.encode(time_step.observation)
-            self.agent_states.append(s)
+            self.agent_states.append(s[-self.state_dim:])
             s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
             h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
             self.agent_seq_states.append(h)
@@ -263,7 +263,7 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
 
         with torch.no_grad():
             s = self.encode(time_step.observation)
-            self.agent_states.append(s)
+            self.agent_states.append(s[-self.state_dim:])
             s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
             h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
             self.agent_seq_states.append(h)

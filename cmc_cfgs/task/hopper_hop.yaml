@@ -4,5 +4,7 @@ train_cams: [0]
 
 exp_group: 'hopper_hop'
 
-episode_len: 50
-batch_size: 40
+batch_size: 32
+episode_len: 40
+
+num_epochs: 8001

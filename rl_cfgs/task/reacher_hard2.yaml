@@ -3,22 +3,15 @@ defaults:
   - _self_
 
 task_name: reacher_hard
+exp_group: reacher_hard2
 
-expert_file: experts/reacher_hard.pt
-cmc_file: cmc_exp_local/reacher_hard2/1/snapshot.pt
+expert_file: exp_local/${exp_group}/1/snapshot.pt
+cmc_file: cmc_exp_local/${exp_group}/1/snapshot.pt
+video_dir: videos/${exp_group}/exp
 xml_path: domain_xmls/reacher2.xml
-
-train_cams: [0]
-learner_camera_id: 0
-
-video_dir: 'videos/reacher_hard2/exp'
-
 
 enc_batch_size: 16
 episode_len: 50
-
-
-exp_group: reacher_hard2
 
 context_changer:
   _target_: context_changers.ReacherHardWCContextChanger

@@ -3,17 +3,14 @@ defaults:
   - _self_
 
 task_name: hopper_hop
-
-expert_file: exp_local/hopper_hop/1/snapshot.pt
-cmc_file: cmc_exp_local/hopper_hop/1/snapshot.pt
-
-context_camera_ids: [0]
-learner_camera_id: 0
-
 exp_group: hopper_hop
 
-im_w: 64
-im_h: 64
+expert_file: exp_local/${exp_group}/1/snapshot.pt
+cmc_file: cmc_exp_local/${exp_group}/1/snapshot.pt
+video_dir: videos/${exp_group}/exp
+
+enc_batch_size: 16
+episode_len: 40
 
 context_changer:
   _target_: context_changers.NullContextChanger

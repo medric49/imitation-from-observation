@@ -3,21 +3,16 @@ defaults:
   - _self_
 
 task_name: door-open-v2
-
-expert_file: exp_local/door_open/1/snapshot.pt
-cmc_file: cmc_exp_local/door_open/1/snapshot.pt
-
-context_camera_ids: [0]
-learner_camera_id: 0
-
 exp_group: door_open
+
+expert_file: exp_local/${exp_group}/1/snapshot.pt
+cmc_file: cmc_exp_local/${exp_group}/1/snapshot.pt
+video_dir: videos/${exp_group}/exp
+
+enc_batch_size: 16
+episode_len: 50
+
 meta_world: true
-episode_len: 40
-
-im_w: 64
-im_h: 64
-
-
 
 context_changer:
   _target_: context_changers.NullContextChanger

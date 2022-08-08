@@ -45,7 +45,7 @@ if __name__ == '__main__':
 
     num_train = 15000
     num_valid = 3000
-    ep_len = 50
+    ep_len = 45
     video_dir = Path(f'videos/{env_dir}')
 
     im_w, im_h = 64, 64
