@@ -10,6 +10,8 @@ import nets
 import utils
 from losses import SupConLoss
 
+PATCH_SIZE = 32
+
 
 class LSTMEncoder(nn.Module):
     def __init__(self, input_size):
@@ -300,13 +302,21 @@ class CMCBasic(CMCModel):
         return l_seq, l_vaes
 
     def compute_img_losses(self, video, e_seq, e_1_seq, e_2_seq, T):
-        video0 = self._decode(e_seq)
         t, c_t, nc_t = utils.context_indices(T, context_width=2)
         e_t = e_seq[t]
         e_c_t = e_seq[c_t]
         e_nc_t = e_seq[nc_t]
         l_frame = self.contrast_loss(e_1_seq.view(-1, self.hidden_dim), e_2_seq.view(-1, self.hidden_dim)) + self.loss_sns(e_t, e_c_t, e_nc_t) + self.contrast_loss(e_t, e_c_t)
-        l_vaei = self.loss_vae_img(video, video0)
+
+        video0 = self._decode(e_seq)
+        l_vaei = 0.
+        for i in range(0, T, PATCH_SIZE):
+            patch = video[i: i + PATCH_SIZE]
+            patch = patch.to(device=utils.device(), dtype=torch.float)
+            patch0 = video0[i: i + PATCH_SIZE]
+            patch0 = patch0.to(device=utils.device(), dtype=torch.float)
+            l_vaei += self.loss_vae_img(patch, patch0) * patch0.shape[0]
+        l_vaei /= T
         return l_frame, l_vaei
 
     def evaluate_seq_encoder(self, video_i, video_n, *args, **kwargs):
@@ -317,7 +327,17 @@ class CMCBasic(CMCModel):
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
         video = torch.cat([video_i, video_n], dim=1)  # T x 2n x c x h x w
 
-        e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
+        e_1_seq = []
+        e_2_seq = []
+        for i in range(0, T, PATCH_SIZE):
+            patch = video[i: i + PATCH_SIZE]
+            patch = patch.to(device=utils.device(), dtype=torch.float)
+            e_1, e_2 = self._encode(patch)
+            e_1_seq.append(e_1)
+            e_2_seq.append(e_2)
+
+        e_1_seq = torch.cat(e_1_seq)
+        e_2_seq = torch.cat(e_2_seq)
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
 
         l_seq, l_vaes = self.compute_seq_losses(e_seq, T, n)
@@ -342,7 +362,17 @@ class CMCBasic(CMCModel):
         video_n = torch.transpose(video_n, dim0=0, dim1=1)  # T x n x c x h x w
         video = torch.cat([video_i, video_n], dim=1)  # T x 2n x c x h x w
 
-        e_1_seq, e_2_seq = self._encode(video)  # T x 2n x z/2
+        e_1_seq = []
+        e_2_seq = []
+        for i in range(0, T, PATCH_SIZE):
+            patch = video[i: i + PATCH_SIZE]
+            patch = patch.to(device=utils.device(), dtype=torch.float)
+            e_1, e_2 = self._encode(patch)
+            e_1_seq.append(e_1)
+            e_2_seq.append(e_2)
+
+        e_1_seq = torch.cat(e_1_seq)
+        e_2_seq = torch.cat(e_2_seq)
         e_seq = torch.cat([e_1_seq, e_2_seq], dim=2)  # T x 2n x z
 
         l_seq, l_vaes = self.compute_seq_losses(e_seq, T, n)
@@ -380,7 +410,7 @@ class CMCBasic(CMCModel):
     def _decode(self, e_seq):
         video = []
         for t in range(e_seq.shape[0]):
-            o = self.deconv(e_seq[t])
+            o = self.deconv(e_seq[t]).to(device=torch.device('cpu'))
             video.append(o)
         video = torch.stack(video)
         return video

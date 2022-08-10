@@ -274,8 +274,8 @@ class Workspace:
             # try to update the encoder
             if not seed_until_step(self.global_step) and train_encoder_every_step(self.global_step) and train_encoder_until_step(self.global_step):
                 video_i, video_n = next(self.dataloader_iter)
-                video_i = video_i.to(device=utils.device(), dtype=torch.float)
-                video_n = video_n.to(device=utils.device(), dtype=torch.float)
+                video_i = video_i.to(dtype=torch.float)
+                video_n = video_n.to(dtype=torch.float)
                 video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
                 enc_metrics = self.encoder.update(video_i, video_n, seq_only=True)
                 # utils.soft_update_params(self.encoder, self.encoder_target, self.cfg.critic_target_tau)
