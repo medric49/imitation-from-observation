@@ -129,7 +129,7 @@ class Workspace:
                                                     self.cfg.train_cams, self.cfg.im_w,
                                                     self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
                                                     hydra.utils.instantiate(self.cfg.context_changer),
-                                                    dist_reward=True, to_lab=self.cfg.to_lab)
+                                                    dist_reward=False, to_lab=self.cfg.to_lab)
 
         # create replay buffer
         data_specs = (

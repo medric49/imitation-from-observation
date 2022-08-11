@@ -88,7 +88,7 @@ class ContrastiveLoss(nn.Module):
         self.loss = SupConLoss()
         self.normalize = alexnet.Normalize()
 
-    def foward(self, x1, x2):
+    def forward(self, x1, x2):
         x1 = self.normalize(x1)
         x2 = self.normalize(x2)
         x = torch.stack([x1, x2], dim=1)
