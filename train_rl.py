@@ -6,6 +6,7 @@ import time
 import cmc_model
 import datasets
 import metaworld_env
+import metaworld.policies
 import virl_model
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -49,8 +50,20 @@ class Workspace:
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
 
-        self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
-        self.expert.train(training=False)
+        if not self.cfg.get('meta_world', None):
+            self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
+                                       self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
+                                       episode_len=self.cfg.episode_len)
+        else:
+            self.expert_env = metaworld_env.Env(self.cfg.task_name)
+            self.expert_env = dmc.wrap(self.expert_env, self.cfg.expert_frame_stack, self.cfg.action_repeat, episode_len=self.cfg.episode_len)
+
+        if not self.cfg.get('metaworld_policy', None):
+            self.expert: drqv2.DrQV2Agent = drqv2.DrQV2Agent.load(to_absolute_path(self.cfg.expert_file))
+            self.expert.train(training=False)
+        else:
+            policy = hydra.utils.instantiate(self.cfg.metaworld_policy)
+            self.expert = metaworld_env.Expert(policy, self.expert_env)
 
         video_dir = Path(to_absolute_path(self.cfg.video_dir))
         if video_dir.exists():
@@ -82,9 +95,6 @@ class Workspace:
 
         # create envs
         if not self.cfg.get('meta_world', None):
-            self.expert_env = dmc.make(self.cfg.task_name, self.cfg.expert_frame_stack,
-                                       self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
-                                       episode_len=self.cfg.episode_len)
             self.train_env = dmc.make(self.cfg.task_name, self.cfg.frame_stack,
                                       self.cfg.action_repeat, self.cfg.seed, self.cfg.get('xml_path', None),
                                       self.cfg.learner_camera_id, self.cfg.im_w, self.cfg.im_h,
@@ -97,9 +107,6 @@ class Workspace:
                                      hydra.utils.instantiate(self.cfg.context_changer),
                                      episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
         else:
-            self.expert_env = metaworld_env.Env(self.cfg.task_name)
-            self.expert_env = dmc.wrap(self.expert_env, self.cfg.expert_frame_stack, self.cfg.action_repeat, episode_len=self.cfg.episode_len)
-
             self.train_env = metaworld_env.Env(self.cfg.task_name, self.cfg.im_w, self.cfg.im_h)
             self.train_env = dmc.wrap(self.train_env, self.cfg.frame_stack, self.cfg.action_repeat,
                                       episode_len=self.cfg.episode_len, to_lab=self.cfg.to_lab, normalize_img=not self.cfg.to_lab)
@@ -112,11 +119,6 @@ class Workspace:
             utils.device())
         self.encoder.eval()
         self.encoder.deactivate_state_update()
-        # self.encoder_target: cmc_model.CMCModel = cmc_model.CMCModel.load(to_absolute_path(self.cfg.cmc_file)).to(
-        #     utils.device())
-        # self.encoder_target.eval()
-        # for param in self.encoder_target.parameters():
-        #     param.requires_grad = False
 
         self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
                                                      self.expert_env,
@@ -278,7 +280,6 @@ class Workspace:
                 video_n = video_n.to(dtype=torch.float)
                 video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
                 enc_metrics = self.encoder.update(video_i, video_n, seq_only=True)
-                # utils.soft_update_params(self.encoder, self.encoder_target, self.cfg.critic_target_tau)
                 self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
 
             # try to update the agent
@@ -297,6 +298,8 @@ class Workspace:
             episode_reward += time_step.reward
             episode_step += 1
             self._global_step += 1
+
+        shutil.rmtree(to_absolute_path(self.cfg.video_dir), ignore_errors=True)
 
     def save_snapshot(self):
         snapshot = self.work_dir / 'snapshot.pt'

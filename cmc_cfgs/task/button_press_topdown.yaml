@@ -1,0 +1,9 @@
+train_video_dir: 'videos/button_press_topdown/train'
+valid_video_dir: 'videos/button_press_topdown/valid'
+train_cams: [0]
+
+exp_group: 'button_press_topdown'
+
+episode_len: 60
+batch_size: 16
+num_epochs: 8001
