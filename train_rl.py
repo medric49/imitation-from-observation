@@ -68,7 +68,7 @@ class Workspace:
         video_dir = Path(to_absolute_path(self.cfg.video_dir))
         if video_dir.exists():
             shutil.rmtree(video_dir)
-        Path(video_dir / '0').mkdir(exist_ok=True, parents=True)
+        os.symlink(video_dir / '../train/0', video_dir / '0')
         Path(video_dir / '1').mkdir(exist_ok=True, parents=True)
 
         self.setup()
@@ -246,8 +246,8 @@ class Workspace:
                 # reset env
                 time_step = self.train_env.reset()
                 self.replay_storage.add(time_step)
-                np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'),
-                        self.train_env.expert_frames)
+                # np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'),
+                #         self.train_env.expert_frames)
                 frame_sequence = np.array(frame_sequence, dtype=np.uint8)
                 np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
                 frame_sequence = [[]]

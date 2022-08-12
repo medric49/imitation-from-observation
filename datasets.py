@@ -95,8 +95,8 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
             class_dir = self._root / str(c)
             files = list(sorted(class_dir.iterdir()))
             if max_num_video is not None and len(files) > max_num_video:
-                old_files = files[:-20000]
-                files = files[-20000:]
+                old_files = files[:-15000]
+                files = files[-15000:]
                 for f in old_files:
                     os.remove(f)
             self._files.append(files)
