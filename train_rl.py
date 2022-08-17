@@ -6,8 +6,6 @@ import time
 import cmc_model
 import datasets
 import metaworld_env
-import metaworld.policies
-import virl_model
 
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
@@ -68,8 +66,8 @@ class Workspace:
         video_dir = Path(to_absolute_path(self.cfg.video_dir))
         if video_dir.exists():
             shutil.rmtree(video_dir)
-        os.symlink(video_dir / '../train/0', video_dir / '0')
         Path(video_dir / '1').mkdir(exist_ok=True, parents=True)
+        os.symlink(video_dir / '../train/0', video_dir / '0')
 
         self.setup()
 
@@ -141,8 +139,7 @@ class Workspace:
             specs.Array((1,), np.float32, 'discount')
         )
 
-        self.replay_storage = ReplayBufferStorage(data_specs,
-                                                  self.work_dir / 'buffer')
+        self.replay_storage = ReplayBufferStorage(data_specs, self.work_dir / 'buffer')
 
         self.replay_loader = make_replay_loader(
             self.work_dir / 'buffer', self.cfg.replay_buffer_size,

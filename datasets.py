@@ -85,7 +85,7 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         self.im_h = im_h
         self.update_files()
 
-        self._episode_len = episode_len
+        self._episode_len = episode_len + 1
         self._cam_ids = cam_ids
         self.to_lab = to_lab
 

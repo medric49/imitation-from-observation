@@ -39,7 +39,7 @@ if __name__ == '__main__':
     expert_file, env_name = env_data[env_dir]
 
     env = metaworld_env.Env(env_name)
-    env = dmc.wrap(env, frame_stack=3, action_repeat=2)
+    env = dmc.wrap(env, frame_stack=3, action_repeat=2, episode_len=args.ep_len)
     if type(expert_file) != str:
         policy = expert_file()
         expert = metaworld_env.Expert(policy, env)
@@ -56,19 +56,19 @@ if __name__ == '__main__':
     im_w, im_h = 64, 64
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, context_changers.NullContextChanger(), cam_ids=[0],
-        ep_len=ep_len, num=num_train, im_w=im_w, im_h=im_h)
+        num=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, context_changers.NullContextChanger(), cam_ids=[0],
-        ep_len=ep_len, num=num_valid, im_w=im_w, im_h=im_h)
+        num=num_valid, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'train/1', agent, env, context_changers.NullContextChanger(), cam_ids=[0],
-        ep_len=ep_len, num=num_train, im_w=im_w, im_h=im_h)
+        num=num_train, im_w=im_w, im_h=im_h)
 
     utils.generate_video_from_expert(
         video_dir / 'valid/1', agent, env, context_changers.NullContextChanger(), cam_ids=[0],
-        ep_len=ep_len, num=num_valid, im_w=im_w, im_h=im_h)
+        num=num_valid, im_w=im_w, im_h=im_h)
 
 
 
