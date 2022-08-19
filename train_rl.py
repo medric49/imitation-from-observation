@@ -118,18 +118,16 @@ class Workspace:
         self.encoder.eval()
         self.encoder.deactivate_state_update()
 
-        self.train_env = dmc.ViRLEncoderStackWrapper(self.train_env, self.expert, self.encoder,
-                                                     self.expert_env,
-                                                     self.cfg.train_cams, self.cfg.im_w,
-                                                     self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                     hydra.utils.instantiate(self.cfg.context_changer),
-                                                     dist_reward=True, to_lab=self.cfg.to_lab)
-        self.eval_env = dmc.ViRLEncoderStackWrapper(self.eval_env, self.expert, self.encoder,
-                                                    self.expert_env,
-                                                    self.cfg.train_cams, self.cfg.im_w,
-                                                    self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                    hydra.utils.instantiate(self.cfg.context_changer),
-                                                    dist_reward=False, to_lab=self.cfg.to_lab)
+        self.train_env = dmc.EncoderStackWrapper(self.train_env, self.expert, self.encoder,
+                                                 self.expert_env,
+                                                 self.cfg.train_cams, self.cfg.im_w,
+                                                 self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                 hydra.utils.instantiate(self.cfg.context_changer), to_lab=self.cfg.to_lab)
+        self.eval_env = dmc.EncoderStackWrapper(self.eval_env, self.expert, self.encoder,
+                                                self.expert_env,
+                                                self.cfg.train_cams, self.cfg.im_w,
+                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
+                                                hydra.utils.instantiate(self.cfg.context_changer), to_lab=self.cfg.to_lab)
 
         # create replay buffer
         data_specs = (
@@ -198,6 +196,17 @@ class Workspace:
             log('episode', self.global_episode)
             log('step', self.global_step)
 
+    def save_train_frame(self):
+        frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
+        self.frame_sequence[0].append(frame)
+        self.train_video_recorder.init(frame.transpose((2, 0, 1)))
+
+    def reset_train_episode(self):
+        time_step = self.train_env.reset()
+        self.episode_time_steps = [time_step]
+        self.frame_sequence = [[]]
+        return time_step
+
     def train(self):
         # predicates
         train_until_step = utils.Until(self.cfg.num_train_frames,
@@ -209,21 +218,24 @@ class Workspace:
         train_encoder_every_step = utils.Every(self.cfg.train_encoder_every_frames, self.cfg.action_repeat)
         train_encoder_until_step = utils.Until(self.cfg.num_encoder_train_frames, self.cfg.action_repeat)
 
-        episode_step, episode_reward = 0, 0
-        frame_sequence = [[]]
-        time_step = self.train_env.reset()
-        np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'), self.train_env.expert_frames)
-        self.replay_storage.add(time_step)
-
-        frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
-        frame_sequence[0].append(frame)
-        self.train_video_recorder.init(frame.transpose((2, 0, 1)))
+        episode_step = 0
+        time_step = self.reset_train_episode()
+        self.save_train_frame()
 
         metrics = None
         while train_until_step(self.global_step):
             if time_step.last():
                 self._global_episode += 1
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
+
+                episode_rewards = self.train_env.compute_episode_reward()
+                for i, ts in enumerate(self.episode_time_steps):
+                    reward = episode_rewards[i] if i != 0 else 0.
+                    self.replay_storage.add(ts._replace(reward=reward))
+
+                self.frame_sequence = np.array(self.frame_sequence, dtype=np.uint8)
+                np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), self.frame_sequence)
+                self.dataset.update_files(max_num_video=self.cfg.max_num_encoder_videos)
 
                 # wait until all the metrics schema is populated
                 if metrics is not None:
@@ -234,30 +246,20 @@ class Workspace:
                                                       ty='train') as log:
                         log('fps', episode_frame / elapsed_time)
                         log('total_time', total_time)
-                        log('episode_reward', episode_reward)
+                        log('episode_reward', episode_rewards.sum())
                         log('episode_length', episode_frame)
                         log('episode', self.global_episode)
                         log('buffer_size', len(self.replay_storage))
                         log('step', self.global_step)
 
-                # reset env
-                time_step = self.train_env.reset()
-                self.replay_storage.add(time_step)
-                # np.save(to_absolute_path(f'{self.cfg.video_dir}/0/{int(time.time() * 1000)}'),
-                #         self.train_env.expert_frames)
-                frame_sequence = np.array(frame_sequence, dtype=np.uint8)
-                np.save(to_absolute_path(f'{self.cfg.video_dir}/1/{int(time.time() * 1000)}'), frame_sequence)
-                frame_sequence = [[]]
-                self.dataset.update_files(max_num_video=self.cfg.max_num_encoder_videos)
-
-                frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
-                frame_sequence[0].append(frame)
-                self.train_video_recorder.init(frame.transpose((2, 0, 1)))
                 # try to save snapshot
                 if self.cfg.save_snapshot:
                     self.save_snapshot()
+
+                # reset env
                 episode_step = 0
-                episode_reward = 0
+                time_step = self.reset_train_episode()
+                self.save_train_frame()
 
             # try to evaluate
             if eval_every_step(self.global_step):
@@ -286,13 +288,9 @@ class Workspace:
 
             # take env step
             time_step = self.train_env.step(action)
-            self.replay_storage.add(time_step)
+            self.episode_time_steps.append(time_step)
+            self.save_train_frame()
 
-            frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
-            frame_sequence[0].append(frame)
-            self.train_video_recorder.record(frame.transpose((2, 0, 1)))
-
-            episode_reward += time_step.reward
             episode_step += 1
             self._global_step += 1
 

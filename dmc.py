@@ -150,8 +150,8 @@ class FrameStackWrapper(dm_env.Environment):
         return getattr(self._env, name)
 
 
-class ViRLEncoderStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, dist_reward, to_lab=False):
+class EncoderStackWrapper(dm_env.Environment):
+    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, to_lab=False):
 
         self._env = env
 
@@ -169,7 +169,6 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.im_w = im_w
         self.im_h = im_h
         self.state_dim = state_dim
-        self.dist_reward = dist_reward
         self.to_lab = to_lab
 
         self.expert_frames = None
@@ -178,8 +177,6 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
         self.agent_states = None
 
         self.init_channel = self._env.observation_spec().shape[0] // self.frame_stack
-
-        self.step_id = None
 
     def make_expert_states(self):
         with torch.no_grad():
@@ -241,43 +238,27 @@ class ViRLEncoderStackWrapper(dm_env.Environment):
             states = states.cpu().numpy()
         return states
 
+    def compute_episode_reward(self):
+        s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
+        agent_seq_states = self.encoder.encode_state_seq(s_seq).cpu().numpy()
+        rewards = np.linalg.norm(agent_seq_states - self.expert_seq_states, axis=1)
+        return rewards
+
     def reset(self) -> TimeStep:
         self.expert_frames, self.expert_states, self.expert_seq_states = self.make_expert_states()
         self.agent_states = []
-        self.agent_seq_states = []
-
         time_step = self._env.reset()
-        self.step_id = 0
-
         with torch.no_grad():
             s = self.encode(time_step.observation)
             self.agent_states.append(s[-self.state_dim:])
-            s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
-            h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
-            self.agent_seq_states.append(h)
-        return time_step._replace(observation=s, reward=0.)
+        return time_step._replace(observation=s)
 
     def step(self, action) -> TimeStep:
         time_step = self._env.step(action)
-        self.step_id += 1
-
         with torch.no_grad():
             s = self.encode(time_step.observation)
             self.agent_states.append(s[-self.state_dim:])
-            s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
-            h = self.encoder.encode_state_seq(s_seq)[-1].cpu().numpy()
-            self.agent_seq_states.append(h)
-
-        if self.dist_reward:
-            reward_1 = 0
-            reward_2 = 0
-            h_1 = self.expert_seq_states[self.step_id]
-            reward_1 += -np.linalg.norm(h_1 - h)
-            reward = reward_1 + reward_2
-        else:
-            reward = time_step.reward
-
-        return time_step._replace(observation=s, reward=reward)
+        return time_step._replace(observation=s)
 
     def observation_spec(self):
         state_dim = self.state_dim * self.frame_stack
