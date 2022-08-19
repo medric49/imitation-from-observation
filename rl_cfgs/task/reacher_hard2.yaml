@@ -8,7 +8,7 @@ exp_group: reacher_hard2
 expert_file: exp_local/${task_name}/1/snapshot.pt
 cmc_file: cmc_exp_local/${exp_group}/1/snapshot.pt
 video_dir: videos/${exp_group}/exp
-xml_path: domain_xmls/reacher2.xml
+xml_path: domain_xmls/reacher.xml
 
 enc_batch_size: 16
 episode_len: 50

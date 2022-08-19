@@ -53,6 +53,7 @@ class Predictor(nn.Module):
             nn.Linear(input_size, input_size),
             nn.ReLU(inplace=True),
             nn.Linear(input_size, input_size),
+            alexnet.Normalize()
         )
 
     def forward(self, h):

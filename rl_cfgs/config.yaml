@@ -1,6 +1,6 @@
 defaults:
   - _self_
-  - task@_global_: reacher_hard_wc
+  - task@_global_: reacher_hard
   - override hydra/launcher: submitit_local
 
 im_w: 64
