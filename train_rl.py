@@ -82,7 +82,7 @@ class Workspace:
 
         self.cfg.agent.action_shape = self.train_env.action_spec().shape
         self.cfg.agent.state_dim = self.train_env.observation_spec().shape[0]
-        self.rl_agent: rl_model.RLAgent = hydra.utils.instantiate(self.cfg.agent).to(utils.device())
+        self.rl_agent: rl_model.RLAgent = hydra.utils.instantiate(self.cfg.agent, num_expl_steps=self.cfg.enc_batch_size*2*self.cfg.episode_len).to(utils.device())
 
         self.timer = utils.Timer()
         self._global_step = 0
@@ -189,10 +189,14 @@ class Workspace:
             log('episode', self.global_episode)
             log('step', self.global_step)
 
-    def save_train_frame(self):
+    def save_train_frame(self, first_frame=True):
         frame = self.train_env.physics.render(self.cfg.im_w, self.cfg.im_h, camera_id=self.cfg.learner_camera_id)
         self.frame_sequence[0].append(frame)
-        self.train_video_recorder.init(frame.transpose((2, 0, 1)))
+        frame = frame.transpose((2, 0, 1))
+        if first_frame:
+            self.train_video_recorder.init(frame)
+        else:
+            self.train_video_recorder.record(frame)
 
     def reset_train_episode(self):
         time_step = self.train_env.reset()
@@ -204,7 +208,7 @@ class Workspace:
         # predicates
         train_until_step = utils.Until(self.cfg.num_train_frames,
                                        self.cfg.action_repeat)
-        seed_until_step = utils.Until(self.cfg.num_seed_frames,
+        seed_until_step = utils.Until(self.cfg.enc_batch_size * 2 * self.cfg.episode_len * 2,
                                       self.cfg.action_repeat)
         eval_every_step = utils.Every(self.cfg.eval_every_frames,
                                       self.cfg.action_repeat)
@@ -282,7 +286,7 @@ class Workspace:
             # take env step
             time_step = self.train_env.step(action)
             self.episode_time_steps.append(time_step)
-            self.save_train_frame()
+            self.save_train_frame(first_frame=False)
 
             episode_step += 1
             self._global_step += 1
