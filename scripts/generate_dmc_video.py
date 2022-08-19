@@ -18,7 +18,7 @@ env_data = {
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--env', default='reacher_hard', type=str, help='Environment name', required=False)
-    parser.add_argument('--ep_len', default=50, type=int, help='Video length', required=False)
+    parser.add_argument('--episode_len', default=50, type=int, help='Video length', required=False)
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     episode_len = args.ep_len
