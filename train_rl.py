@@ -64,15 +64,16 @@ class Workspace:
             self.expert = metaworld_env.Expert(policy, self.expert_env)
 
         video_dir = Path(to_absolute_path(self.cfg.video_dir))
+        self.expert_video_dir = video_dir / '../train/0'
         if video_dir.exists():
             shutil.rmtree(video_dir)
         Path(video_dir / '1').mkdir(exist_ok=True, parents=True)
-        os.symlink(video_dir / '../train/0', video_dir / '0')
+        os.symlink(self.expert_video_dir, video_dir / '0')
 
         self.setup()
 
-        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.video_dir), self.cfg.episode_len,
-                                                 self.cfg.train_cams, to_lab=self.cfg.to_lab)
+        self.dataset = datasets.VideoDataset(to_absolute_path(self.cfg.video_dir), self.cfg.episode_len,
+                                             self.cfg.train_cams, to_lab=self.cfg.to_lab)
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
             batch_size=self.cfg.enc_batch_size,
@@ -118,16 +119,8 @@ class Workspace:
         self.encoder.eval()
         self.encoder.deactivate_state_update()
 
-        self.train_env = dmc.EncoderStackWrapper(self.train_env, self.expert, self.encoder,
-                                                 self.expert_env,
-                                                 self.cfg.train_cams, self.cfg.im_w,
-                                                 self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                 hydra.utils.instantiate(self.cfg.context_changer), to_lab=self.cfg.to_lab)
-        self.eval_env = dmc.EncoderStackWrapper(self.eval_env, self.expert, self.encoder,
-                                                self.expert_env,
-                                                self.cfg.train_cams, self.cfg.im_w,
-                                                self.cfg.im_h, self.cfg.agent.state_dim, self.cfg.frame_stack,
-                                                hydra.utils.instantiate(self.cfg.context_changer), to_lab=self.cfg.to_lab)
+        self.train_env = dmc.EncoderStackWrapper(self.train_env, self.encoder, self.cfg.agent.state_dim, self.cfg.frame_stack, self.expert_video_dir, self.cfg.episode_len, self.cfg.im_w, self.cfg.im_h, to_lab=self.cfg.to_lab)
+        self.eval_env = dmc.EncoderStackWrapper(self.eval_env, self.encoder, self.cfg.agent.state_dim, self.cfg.frame_stack, self.expert_video_dir, self.cfg.episode_len, self.cfg.im_w, self.cfg.im_h, to_lab=self.cfg.to_lab)
 
         # create replay buffer
         data_specs = (
@@ -277,7 +270,7 @@ class Workspace:
                 video_i, video_n = next(self.dataloader_iter)
                 video_i = video_i.to(dtype=torch.float)
                 video_n = video_n.to(dtype=torch.float)
-                video_i, video_n = datasets.ViRLVideoDataset.augment(video_i, video_n)
+                video_i, video_n = datasets.VideoDataset.augment(video_i, video_n)
                 enc_metrics = self.encoder.update(video_i, video_n, seq_only=True)
                 self.logger.log_metrics(enc_metrics, self.global_frame, ty='train')
 

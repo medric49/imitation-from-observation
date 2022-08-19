@@ -40,8 +40,8 @@ class Workspace:
         utils.set_seed_everywhere(cfg.seed)
         self.encoder: virl_model.ViRLNet = hydra.utils.instantiate(self.cfg.virl_model).to(utils.device())
 
-        self.dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams)
-        self.valid_dataset = datasets.ViRLVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams)
+        self.dataset = datasets.VideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams)
+        self.valid_dataset = datasets.VideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
@@ -75,7 +75,7 @@ class Workspace:
             video_p = video_p.to(device=utils.device(), dtype=torch.float)
             video_n = video_n.to(device=utils.device(), dtype=torch.float)
 
-            video_i, video_p, video_n = datasets.ViRLVideoDataset.augment(video_i, video_p, video_n)
+            video_i, video_p, video_n = datasets.VideoDataset.augment(video_i, video_p, video_n)
 
             metrics = self.encoder.update(video_i, video_p, video_n)
 

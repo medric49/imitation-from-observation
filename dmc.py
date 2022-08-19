@@ -12,6 +12,7 @@ from numpy.linalg import norm
 import cmc_model
 import context_changers
 import ct_model
+import datasets
 import drqv2
 import utils
 
@@ -151,67 +152,30 @@ class FrameStackWrapper(dm_env.Environment):
 
 
 class EncoderStackWrapper(dm_env.Environment):
-    def __init__(self, env, expert, encoder, expert_env, context_camera_ids, im_w, im_h, state_dim, frame_stack, context_changer, to_lab=False):
+    def __init__(self, env, encoder, state_dim, frame_stack, expert_video_dir, episode_len=None, im_w=64, im_h=64, to_lab=False):
 
         self._env = env
-
-        self.context_changer = context_changer
-        self.expert: drqv2.DrQV2Agent = expert
-        self.expert.train(False)
         self.encoder: cmc_model.CMCModel = encoder
         self.encoder.eval()
+
+        self.state_dim = state_dim
         self.frame_stack = frame_stack
 
-        self.expert_env = expert_env
-
-        self.context_camera_ids = context_camera_ids
+        self.expert_video_dir = expert_video_dir
+        self.episode_len = episode_len
 
         self.im_w = im_w
         self.im_h = im_h
-        self.state_dim = state_dim
         self.to_lab = to_lab
 
-        self.expert_frames = None
-        self.expert_states = None
         self.expert_seq_states = None
         self.agent_states = None
 
         self.init_channel = self._env.observation_spec().shape[0] // self.frame_stack
 
     def make_expert_states(self):
+        episode = datasets.VideoDataset.sample_from_dir(self.expert_video_dir, self.episode_len, self.im_w, self.im_h, self.to_lab)
         with torch.no_grad():
-            self.context_changer.reset()
-            cam_id = random.choice(self.context_camera_ids)
-
-            time_step = self.expert_env.reset()
-            expert_frames = []
-            episode = []
-            with utils.change_context(self.expert_env, self.context_changer):
-                frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
-                expert_frames.append(frame)
-                if self.to_lab:
-                    frame = utils.rgb_to_lab(frame)
-                else:
-                    frame = Image.fromarray(frame)
-                    frame = np.array(frame.resize((224, 224), Image.BICUBIC), dtype=np.float32)
-                    frame /= 255.
-                    frame = utils.normalize(frame, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                episode.append(frame)
-            while not time_step.last():
-                action = self.expert.act(time_step.observation, 1, eval_mode=True)
-                time_step = self.expert_env.step(action)
-                with utils.change_context(self.expert_env, self.context_changer):
-                    frame = self.expert_env.physics.render(self.im_w, self.im_h, camera_id=cam_id)
-                    expert_frames.append(frame)
-                    if self.to_lab:
-                        frame = utils.rgb_to_lab(frame)
-                    else:
-                        frame = Image.fromarray(frame)
-                        frame = np.array(frame.resize((224, 224), Image.BICUBIC), dtype=np.float32)
-                        frame /= 255.
-                        frame = utils.normalize(frame, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-                    episode.append(frame)
-
             T = len(episode)
             batches = []
             for i in range(0, T, 64):
@@ -221,10 +185,9 @@ class EncoderStackWrapper(dm_env.Environment):
                 e_seq = self.encoder.encode_frame(batch)
                 del batch
                 batches.append(e_seq)
-            expert_frames = np.array([expert_frames], dtype=np.uint8)
             e_seq = torch.concat(batches)
             z_seq = self.encoder.encode_state_seq(e_seq)
-        return expert_frames, e_seq.cpu().numpy(), z_seq.cpu().numpy()
+        return z_seq.cpu().numpy()
 
     def encode(self, observation):
         frames = []
@@ -246,7 +209,7 @@ class EncoderStackWrapper(dm_env.Environment):
         return rewards
 
     def reset(self) -> TimeStep:
-        self.expert_frames, self.expert_states, self.expert_seq_states = self.make_expert_states()
+        self.expert_seq_states = self.make_expert_states()
         self.agent_states = []
         time_step = self._env.reset()
         with torch.no_grad():

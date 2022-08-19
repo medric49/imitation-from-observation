@@ -75,7 +75,7 @@ class CTVideoDataset(torch.utils.data.IterableDataset):
             yield self._sample()
 
 
-class ViRLVideoDataset(torch.utils.data.IterableDataset):
+class VideoDataset(torch.utils.data.IterableDataset):
 
     def __init__(self, root, episode_len, cam_ids, to_lab=False, im_w=64, im_h=64):
         self._root = Path(root)
@@ -101,6 +101,8 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
                     os.remove(f)
             self._files.append(files)
 
+
+
     def _sample(self):
         if len(self._cam_ids) > 1:
             cam1, cam2 = random.sample(self._cam_ids, k=3)
@@ -119,13 +121,13 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
         video_n = np.load(video_n)[cam2, :self._episode_len]
 
         if tuple(video_i.shape[1:3]) != (self.im_h, self.im_w):
-            video_i = self.resize(video_i)
+            video_i = VideoDataset.resize(video_i, self.im_w, self.im_h)
         if tuple(video_n.shape[1:3]) != (self.im_h, self.im_w):
-            video_n = self.resize(video_n)
+            video_n = VideoDataset.resize(video_n, self.im_w, self.im_h)
 
         if self.to_lab:
-            video_i = self.rgb_to_lab(video_i)
-            video_n = self.rgb_to_lab(video_n)
+            video_i = VideoDataset.rgb_to_lab(video_i)
+            video_n = VideoDataset.rgb_to_lab(video_n)
         else:
             video_i /= 255.
             video_n /= 255.
@@ -137,18 +139,39 @@ class ViRLVideoDataset(torch.utils.data.IterableDataset):
 
         return video_i, video_n
 
-    def resize(self, video):
+    @staticmethod
+    def resize(video, im_w, im_h):
         frame_list = []
         for t in range(video.shape[0]):
             frame = Image.fromarray(video[t])
-            frame = np.array(frame.resize((self.im_w, self.im_h), Image.BICUBIC), dtype=np.float32)
+            frame = np.array(frame.resize((im_w, im_h), Image.BICUBIC), dtype=np.float32)
             frame_list.append(frame)
         frame_list = np.stack(frame_list)
         return frame_list
 
-    def rgb_to_lab(self, video):
+    @staticmethod
+    def rgb_to_lab(video):
         T = video.shape[0]
         return np.array([utils.rgb_to_lab(video[t]) for t in range(T)])
+
+    @staticmethod
+    def sample_from_dir(video_dir, episode_len=None, im_w=64, im_h=64, to_lab=False):
+        if episode_len is not None:
+            episode_len += 1
+        else:
+            episode_len = -1
+
+        video_dir = Path(video_dir)
+        files = list(video_dir.iterdir())
+        video_i = np.load(random.choice(files))[0, :episode_len]
+        if tuple(video_i.shape[1:3]) != (im_h, im_w):
+            video_i = VideoDataset.resize(video_i, im_w, im_h)
+        if to_lab:
+            video_i = VideoDataset.rgb_to_lab(video_i)
+        else:
+            video_i /= 255.
+            video_i = utils.normalize(video_i, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        return video_i
 
     @staticmethod
     def augment(video_i: torch.Tensor, video_n: torch.Tensor):
