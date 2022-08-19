@@ -14,8 +14,8 @@ if __name__ == '__main__':
     env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, episode_len=episode_len, xml_path='domain_xmls/reacher.xml')
     random_agent = utils.RandomAgent(env)
 
-    num_train = 15000
-    num_valid = 3000
+    num_train = 5000
+    num_valid = 400
     im_w, im_h = 64, 64
 
     video_dir = Path('videos/reacher_hard2')

@@ -240,8 +240,9 @@ class EncoderStackWrapper(dm_env.Environment):
 
     def compute_episode_reward(self):
         s_seq = torch.tensor(np.array(self.agent_states), dtype=torch.float, device=utils.device())
-        agent_seq_states = self.encoder.encode_state_seq(s_seq).cpu().numpy()
-        rewards = np.linalg.norm(agent_seq_states - self.expert_seq_states, axis=1)
+        with torch.no_grad():
+            agent_seq_states = self.encoder.encode_state_seq(s_seq).cpu().numpy()
+            rewards = - np.linalg.norm(agent_seq_states - self.expert_seq_states, axis=1)
         return rewards
 
     def reset(self) -> TimeStep:

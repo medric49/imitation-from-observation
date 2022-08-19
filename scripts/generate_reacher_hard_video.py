@@ -12,7 +12,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 if __name__ == '__main__':
     expert = DrQV2Agent.load('experts/reacher_hard.pt')
     ep_len = 50
-    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, xml_path='domain_xmls/reacher.xml')
+    env = dmc.make('reacher_hard', frame_stack=3, action_repeat=2, seed=2, episode_len=50, xml_path='domain_xmls/reacher.xml')
     random_agent = utils.RandomAgent(env)
 
     num_train = 5000
