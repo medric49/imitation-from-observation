@@ -1,4 +1,4 @@
-exp_group: 'reacher_hard2'
+exp_group: 'finger_turn_easy'
 
 train_video_dir: videos/${exp_group}/train
 valid_video_dir: videos/${exp_group}/valid

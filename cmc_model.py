@@ -10,7 +10,7 @@ import nets
 import utils
 from losses import SupConLoss
 
-PATCH_SIZE = 16
+PATCH_SIZE = 50
 
 
 class LSTMEncoder(nn.Module):

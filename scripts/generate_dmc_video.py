@@ -13,6 +13,7 @@ warnings.filterwarnings('ignore', category=DeprecationWarning)
 env_data = {
     'reacher_hard2': ('reacher_hard', 'experts/reacher_hard.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardWCContextChanger),
     'reacher_hard': ('reacher_hard', 'experts/reacher_hard.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardContextChanger),
+    'finger_turn_easy': ('finger_turn_easy', 'experts/finger_turn_easy.pt', None, context_changers.NullContextChanger)
 }
 
 if __name__ == '__main__':
@@ -21,7 +22,7 @@ if __name__ == '__main__':
     parser.add_argument('--episode_len', default=50, type=int, help='Video length', required=False)
     args, _ = parser.parse_known_args(sys.argv[1:])
 
-    episode_len = args.ep_len
+    episode_len = args.episode_len
     task_name = args.env
     env_name, expert_file, xml_file, cc_class = env_data[task_name]
 
