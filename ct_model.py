@@ -7,10 +7,8 @@ import nets
 
 
 class CTModel(nn.Module):
-    def __init__(self, hidden_dim, lr, use_tb):
+    def __init__(self, hidden_dim, lr):
         super(CTModel, self).__init__()
-
-        self.use_tb = use_tb
 
         self.enc1 = nets.CTEncNet(hidden_dim)
         self.enc2 = nets.CTEncNet(hidden_dim)

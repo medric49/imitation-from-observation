@@ -100,6 +100,7 @@ class Workspace:
 
                     eval_loss = metrics['loss']
                     print('Eval loss: ', eval_loss, end='\t')
+                    self.save_snapshot()
                     if eval_loss < self._eval_loss:
                         self._eval_loss = eval_loss
                         self.save_snapshot(as_optimal=True)
@@ -115,7 +116,6 @@ class Workspace:
                     video.make_video_from_frames(self.work_dir / f'eval_video/{self._epoch}_expert.mp4', video1.cpu().numpy())
                     video.make_video_from_frames(self.work_dir / f'eval_video/{self._epoch}_agent.mp4', video2.cpu().numpy())
                 self.context_translator.train()
-            self.save_snapshot()
             self._epoch += 1
 
     def save_snapshot(self, as_optimal=False):

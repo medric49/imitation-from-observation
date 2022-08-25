@@ -14,10 +14,9 @@ num_workers: 4
 use_tb: true
 
 ct_model:
-  _target_: ct_model.CTNet
+  _target_: ct_model.CTModel
   lr: 1e-4
   hidden_dim: 128
-  use_tb: ${use_tb}
 
 exp_group: ${now:%Y.%m.%d}
 exp_id: ${now:%H%M%S}
