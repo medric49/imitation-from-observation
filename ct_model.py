@@ -12,8 +12,8 @@ class CTModel(nn.Module):
 
         self.enc1 = nets.CTEncNet(hidden_dim)
         self.enc2 = nets.CTEncNet(hidden_dim)
-        # self.t = nets.TranslatorNet(hidden_dim)
-        self.t = nets.LSTMTranslatorNet(hidden_dim)
+        self.t = nets.TranslatorNet(hidden_dim)
+        # self.t = nets.LSTMTranslatorNet(hidden_dim)
         self.dec = nets.CTDecNet(hidden_dim)
 
         self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
