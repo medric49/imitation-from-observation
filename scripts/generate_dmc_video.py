@@ -11,15 +11,17 @@ from pathlib import Path
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 env_data = {
-    'reacher_hard2': ('reacher_hard', 'experts/reacher_hard.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardWCContextChanger),
-    'reacher_hard': ('reacher_hard', 'experts/reacher_hard.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardContextChanger),
-    'finger_turn_easy': ('finger_turn_easy', 'experts/finger_turn_easy.pt', None, context_changers.NullContextChanger)
+    'reacher_hard2': ('reacher_hard', 'exp_local/reacher_hard/1/snapshot.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardWCContextChanger),
+    'reacher_hard': ('reacher_hard', 'exp_local/reacher_hard/1/snapshot.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardContextChanger),
 }
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--env', default='reacher_hard', type=str, help='Environment name', required=False)
+    parser.add_argument('--env', default='reacher_hard2', type=str, help='Environment name', required=False)
     parser.add_argument('--episode_len', default=50, type=int, help='Video length', required=False)
+    parser.add_argument('--im-w', default=64, type=int, help='Frame width', required=False)
+    parser.add_argument('--im-h', default=64, type=int, help='Frame height', required=False)
+
     args, _ = parser.parse_known_args(sys.argv[1:])
 
     episode_len = args.episode_len
@@ -34,15 +36,10 @@ if __name__ == '__main__':
 
     num_train = 5000
     num_valid = 400
-    im_w, im_h = 64, 64
+    im_w, im_h = args.im_w, args.im_h
 
     video_dir = Path(f'videos/{task_name}')
-
-    utils.generate_video_from_expert(
-        video_dir / 'train/1', random_agent, env, cc_class(), cam_ids=[0], num=num_train, im_w=im_w, im_h=im_h)
     utils.generate_video_from_expert(
         video_dir / 'train/0', expert, env, cc_class(), cam_ids=[0], num=num_train, im_w=im_w, im_h=im_h)
-    utils.generate_video_from_expert(
-        video_dir / 'valid/1', random_agent, env, cc_class(), cam_ids=[0], num=num_valid, im_w=im_w, im_h=im_h)
     utils.generate_video_from_expert(
         video_dir / 'valid/0', expert, env, cc_class(), cam_ids=[0], num=num_valid, im_w=im_w, im_h=im_h)

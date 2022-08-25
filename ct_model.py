@@ -1,31 +1,28 @@
-import random
 from pathlib import Path
 
-import gc
-
-import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+import nets
 
 
-class CTNet(nn.Module):
+class CTModel(nn.Module):
     def __init__(self, hidden_dim, lr, use_tb):
-        super(CTNet, self).__init__()
+        super(CTModel, self).__init__()
 
         self.use_tb = use_tb
 
-        self.enc1 = EncoderNet(hidden_dim)
-        self.enc2 = EncoderNet(hidden_dim)
-        self.t = LSTMTranslatorNet(hidden_dim)
-        self.dec = DecoderNet(hidden_dim)
+        self.enc1 = nets.CTEncNet(hidden_dim)
+        self.enc2 = nets.CTEncNet(hidden_dim)
+        self.t = nets.TranslatorNet(hidden_dim)
+        self.dec = nets.CTDecNet(hidden_dim)
 
         self._enc1_opt = torch.optim.Adam(self.enc1.parameters(), lr=lr)
         self._enc2_opt = torch.optim.Adam(self.enc2.parameters(), lr=lr)
         self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
         self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
     
-    def translate(self, video1, fobs2, keep_enc2=True):
+    def translate(self, video1, fobs2):
         T = video1.shape[0]
 
         video1 = video1.to(dtype=torch.float) / 255.  # T x c x h x w
@@ -33,20 +30,19 @@ class CTNet(nn.Module):
         video1 = video1.unsqueeze(dim=1)
         fobs2 = fobs2.unsqueeze(dim=0)
 
-        z1_seq = [self.enc1(video1[t]) for t in range(T)]
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
         z1_seq = torch.stack(z1_seq)
 
-        fz2 = self.enc2(fobs2)
+        fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
         z3_seq = self.t(z1_seq, fz2)
 
-        video2 = [self.dec(z3_seq[t]) for t in range(T)]  # T x c x h x w
+        video2 = [self.dec(z3_seq[t], c1, c2, c3, c4) for t in range(T)]  # T x c x h x w
         video2 = torch.stack(video2)
 
         z3_seq = z3_seq.squeeze(dim=1)
         video2 = video2.squeeze(dim=1)
-        if keep_enc2:
-            video2[0] = fobs2[0]
+
         video2 = video2 * 255.
         video2[video2 > 255.] = 255.
         video2[video2 < 0.] = 0.
@@ -68,19 +64,19 @@ class CTNet(nn.Module):
         l_rec = 0
         l_align = 0
 
-        fz2 = self.enc2(fobs2)
+        fz2, c1, c2, c3, c4 = self.enc2(fobs2)
 
-        z1_seq = [self.enc1(video1[t]) for t in range(T)]
+        z1_seq = [self.enc1(video1[t])[0] for t in range(T)]
         z1_seq = torch.stack(z1_seq)
         z3_seq = self.t(z1_seq, fz2)
 
-        z2_seq = [self.enc1(video2[t]) for t in range(T)]
+        z2_seq = [self.enc1(video2[t])[0] for t in range(T)]
         z2_seq = torch.stack(z2_seq)
 
         for t in range(T):
             obs2 = video2[t]
-            obs_z3 = self.dec(z3_seq[t])
-            obs_z2 = self.dec(z2_seq[t])
+            obs_z3 = self.dec(z3_seq[t], c1, c2, c3, c4)
+            obs_z2 = self.dec(z2_seq[t], c1, c2, c3, c4)
 
             l_trans += F.mse_loss(torch.flatten(obs_z3, start_dim=1), torch.flatten(obs2, start_dim=1))
             l_rec += F.mse_loss(torch.flatten(obs_z2, start_dim=1), torch.flatten(obs2, start_dim=1))
@@ -117,10 +113,15 @@ class CTNet(nn.Module):
 
         return metrics
 
-    def encode(self, obs):
-        obs = obs.to(dtype=torch.float) / 255.
-        obs = self.enc1(obs)
-        return obs
+    def encode_frame(self, image):
+        shape = image.shape
+        if len(shape) == 3:
+            image = image.unsqueeze(0)  # 1 x c x h x w
+        image = image.to(dtype=torch.float) / 255.
+        e = self.enc1(image)[0]
+        if len(shape) == 3:
+            e = e.squeeze()
+        return e
 
     @staticmethod
     def load(file):
@@ -128,76 +129,3 @@ class CTNet(nn.Module):
         with snapshot.open('rb') as f:
             payload = torch.load(f)
         return payload['context_translator']
-
-            
-class EncoderNet(nn.Module):
-    def __init__(self, hidden_dim):
-        super(EncoderNet, self).__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=5, stride=2),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(inplace=True),
-
-            nn.Conv2d(64, 128, kernel_size=5, stride=2),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True),
-
-            nn.Conv2d(128, 256, kernel_size=5, stride=2),
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-
-            nn.Conv2d(256, 512, kernel_size=5, stride=2),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(inplace=True),
-
-            nn.Conv2d(512, hidden_dim, kernel_size=1),
-            nn.BatchNorm2d(hidden_dim),
-            nn.LeakyReLU(inplace=True),
-
-            nn.Conv2d(hidden_dim, hidden_dim, kernel_size=1),
-            nn.Flatten()
-        )
-
-    def forward(self, obs):
-        return self.net(obs)
-
-
-class DecoderNet(nn.Module):
-    def __init__(self, hidden_dim):
-        super(DecoderNet, self).__init__()
-        self.net = nn.Sequential(
-            nn.Conv2d(hidden_dim, 512, kernel_size=1),
-            nn.BatchNorm2d(512),
-            nn.LeakyReLU(inplace=True),
-
-            nn.ConvTranspose2d(512, 256, kernel_size=5, stride=2),
-            nn.BatchNorm2d(256),
-            nn.LeakyReLU(inplace=True),
-
-            nn.ConvTranspose2d(256, 128, kernel_size=5, stride=2),
-            nn.BatchNorm2d(128),
-            nn.LeakyReLU(inplace=True),
-
-            nn.ConvTranspose2d(128, 64, kernel_size=5, stride=2, output_padding=1),
-            nn.BatchNorm2d(64),
-            nn.LeakyReLU(inplace=True),
-
-            nn.ConvTranspose2d(64, 3, kernel_size=5, stride=2, output_padding=1)
-        )
-
-    def forward(self, z):
-        z = z.view(z.shape[0], z.shape[1], 1, 1)
-        return self.net(z)
-
-
-class LSTMTranslatorNet(nn.Module):
-    def __init__(self, hidden_dim):
-        super(LSTMTranslatorNet, self).__init__()
-        self.num_layers = 2
-        self.translator = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
-
-    def forward(self, z1_seq, z2):
-        c0 = z2.repeat(self.num_layers, 1, 1)
-        h0 = torch.zeros_like(z2).repeat(self.num_layers, 1, 1)
-        z3_seq, _ = self.translator(z1_seq, (h0, c0))
-        return z3_seq

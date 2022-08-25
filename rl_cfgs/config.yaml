@@ -10,18 +10,14 @@ train_cams: [0]
 learner_camera_id: 0
 
 # task settings
-expert_frame_stack: 3
 frame_stack: 3
 action_repeat: 2
 discount: 0.99
 # train settings
-
+num_seed_frames: 4000
 episode_len: 1000
 # eval
 eval_every_frames: 10000
-train_encoder_every_frames: 100
-num_encoder_train_frames: 200000
-max_num_encoder_videos: 5000
 critic_target_tau: 0.01
 num_eval_episodes: 5
 # snapshot
@@ -42,9 +38,6 @@ experiment: exp
 lr: 1e-4
 state_dim: 128  # 1024
 
-to_lab: true
-
-
 use_frame_state: true
 
 agent:
@@ -56,6 +49,7 @@ agent:
   critic_target_tau: 0.01
   update_every_steps: 2
   use_tb: ${use_tb}
+  num_expl_steps: 2000
   hidden_dim: 1024
   feature_dim: 50
   stddev_schedule: ${stddev_schedule}

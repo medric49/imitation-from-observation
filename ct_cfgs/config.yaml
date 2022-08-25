@@ -8,17 +8,15 @@ num_epochs: 10000
 eval_every_epochs: 60
 num_evaluations: 5
 batch_size: 32
-episode_len: 30
+episode_len: 60
 num_workers: 4
-
-same_video: false
 
 use_tb: true
 
 ct_model:
   _target_: ct_model.CTNet
   lr: 1e-4
-  hidden_dim: 1024
+  hidden_dim: 128
   use_tb: ${use_tb}
 
 exp_group: ${now:%Y.%m.%d}

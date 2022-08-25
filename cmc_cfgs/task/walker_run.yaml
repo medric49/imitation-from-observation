@@ -1,8 +1,0 @@
-train_video_dir: 'videos/walker_run/train'
-valid_video_dir: 'videos/walker_run/valid'
-train_cams: [0]
-
-exp_group: 'walker_run'
-
-episode_len: 50
-batch_size: 40

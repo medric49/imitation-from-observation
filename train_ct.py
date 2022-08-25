@@ -37,10 +37,9 @@ class Workspace:
         self.cfg = cfg
         utils.set_seed_everywhere(cfg.seed)
 
-        self.context_translator: ct_model.CTNet = hydra.utils.instantiate(self.cfg.ct_model).to(utils.device())
-
-        self.dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
-        self.valid_dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len, self.cfg.train_cams, self.cfg.same_video)
+        self.context_translator: ct_model.CTModel = hydra.utils.instantiate(self.cfg.ct_model).to(utils.device())
+        self.dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.train_video_dir), self.cfg.episode_len)
+        self.valid_dataset = datasets.CTVideoDataset(to_absolute_path(self.cfg.valid_video_dir), self.cfg.episode_len)
 
         self.dataloader = torch.utils.data.DataLoader(
             self.dataset,
