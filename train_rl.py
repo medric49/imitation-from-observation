@@ -89,7 +89,7 @@ class Workspace:
             self.eval_env = dmc.wrap(self.eval_env, self.cfg.frame_stack, self.cfg.action_repeat,
                                      episode_len=self.cfg.episode_len)
 
-        self.encoder: ct_model.CTModel = ct_model.CTModel.load(to_absolute_path(self.cfg.cmc_file)).to(
+        self.encoder: ct_model.CTModel = ct_model.CTModel.load(to_absolute_path(self.cfg.ct_file)).to(
             utils.device())
         self.encoder.eval()
 
