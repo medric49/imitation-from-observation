@@ -84,4 +84,14 @@ class TranslatorNet(nn.Module):
         return z3_seq
 
 
+class LSTMTranslatorNet(nn.Module):
+    def __init__(self, hidden_dim):
+        super(LSTMTranslatorNet, self).__init__()
+        self.num_layers = 2
+        self.translator = nn.LSTM(input_size=hidden_dim, hidden_size=hidden_dim, num_layers=self.num_layers)
 
+    def forward(self, z1_seq, z2):
+        c0 = z2.repeat(self.num_layers, 1, 1)
+        h0 = torch.zeros_like(z2).repeat(self.num_layers, 1, 1)
+        z3_seq, _ = self.translator(z1_seq, (h0, c0))
+        return z3_seq
