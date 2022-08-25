@@ -151,21 +151,24 @@ class EncoderStackWrapper(dm_env.Environment):
             states = states.cpu().numpy()
         return states
 
-    def compute_episode_reward(self, expert_video_dir=None, video_frame=None):
-        if expert_video_dir is None and video_frame is None:
+    def compute_episode_reward(self, expert_video_dir=None, episode_list=None, n_video=1):
+        if expert_video_dir is None and episode_list is None:
             raise ValueError
         if expert_video_dir is not None:
-            episode = datasets.CTVideoDataset.sample_from_dir(expert_video_dir, self.episode_len, self.im_w, self.im_h)
+            episode_list = [datasets.CTVideoDataset.sample_from_dir(expert_video_dir, self.episode_len, self.im_w, self.im_h) for i in range(n_video)]
         else:
-            episode = video_frame[:self.episode_len + 1]
-
-        video1 = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
-        fobs2 = torch.tensor(self.agent_obs[0], device=utils.device(), dtype=torch.float)
+            episode_list = [episode[:self.episode_len + 1] for episode in episode_list]
 
         with torch.no_grad():
-            z3_seq, video2 = self.encoder.translate(video1, fobs2)
+            z3_seq_list = []
+            for episode in episode_list:
+                video1 = torch.tensor(episode.transpose((0, 3, 1, 2)), device=utils.device(), dtype=torch.float)
+                fobs2 = torch.tensor(self.agent_obs[0], device=utils.device(), dtype=torch.float)
+                z3_seq, video2 = self.encoder.translate(video1, fobs2)
+                z3_seq_list.append(z3_seq.cpu().numpy())
+            z3_seq_list = np.array(z3_seq_list)
 
-        self.ct_states = z3_seq.cpu().numpy()
+        self.ct_states = z3_seq_list.mean(axis=0)
         self.ct_obs = video2.cpu().numpy()
 
 

@@ -14,6 +14,7 @@ frame_stack: 3
 action_repeat: 2
 discount: 0.99
 # train settings
+n_video: 10
 num_seed_frames: 4000
 episode_len: 1000
 # eval

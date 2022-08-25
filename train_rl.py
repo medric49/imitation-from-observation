@@ -185,7 +185,7 @@ class Workspace:
                 self._global_episode += 1
                 self.train_video_recorder.save(f'{self.global_frame}.mp4')
 
-                episode_rewards = self.train_env.compute_episode_reward(expert_video_dir=self.expert_video_dir)
+                episode_rewards = self.train_env.compute_episode_reward(expert_video_dir=self.expert_video_dir, n_video=self.cfg.n_video)
                 for i, ts in enumerate(self.episode_time_steps):
                     reward = episode_rewards[i] if i != 0 else 0.
                     self.replay_storage.add(ts._replace(reward=reward))

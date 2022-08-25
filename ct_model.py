@@ -20,6 +20,14 @@ class CTModel(nn.Module):
         self._enc2_opt = torch.optim.Adam(self.enc2.parameters(), lr=lr)
         self._t_opt = torch.optim.Adam(self.t.parameters(), lr=lr)
         self._dec_opt = torch.optim.Adam(self.dec.parameters(), lr=lr)
+
+    def translate_from_states(self, z1_seq, fz2):
+        z1_seq = z1_seq.unsqueeze(dim=1)
+        fz2 = fz2.unqueeze(dim=0)
+        z3_seq = self.t(z1_seq, fz2)
+        z3_seq = z3_seq.squeeze(dim=1)
+        return z3_seq
+
     
     def translate(self, video1, fobs2):
         T = video1.shape[0]
