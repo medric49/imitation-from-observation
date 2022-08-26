@@ -245,8 +245,6 @@ class Workspace:
             episode_step += 1
             self._global_step += 1
 
-        shutil.rmtree(to_absolute_path(self.cfg.video_dir), ignore_errors=True)
-
     def save_snapshot(self):
         snapshot = self.work_dir / 'snapshot.pt'
         keys_to_save = ['rl_agent', 'timer', '_global_step', '_global_episode']
