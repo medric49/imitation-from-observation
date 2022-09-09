@@ -1,0 +1,12 @@
+defaults:
+  - medium
+  - _self_
+
+task_name: finger_turn_easy
+exp_group: finger_turn_easy
+
+enc_batch_size: 16
+episode_len: 60
+
+context_changer:
+  _target_: context_changers.NullContextChanger

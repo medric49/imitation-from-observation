@@ -11,6 +11,8 @@ from pathlib import Path
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 
 env_data = {
+    'hopper_stand': ('hopper_stand', 'exp_local/hopper_stand/1/snapshot.pt', None, context_changers.NullContextChanger),
+    'finger_turn_easy': ('finger_turn_easy', 'exp_local/finger_turn_easy/1/snapshot.pt', None, context_changers.NullContextChanger),
     'reacher_hard2': ('reacher_hard', 'exp_local/reacher_hard/1/snapshot.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardWCContextChanger),
     'reacher_hard': ('reacher_hard', 'exp_local/reacher_hard/1/snapshot.pt', 'domain_xmls/reacher.xml', context_changers.ReacherHardContextChanger),
 }

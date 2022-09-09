@@ -11,6 +11,9 @@ batch_size: 32
 episode_len: 60
 num_workers: 4
 
+train_video_dir: videos/${exp_group}/train/0
+valid_video_dir: videos/${exp_group}/valid/0
+
 use_tb: true
 
 ct_model:

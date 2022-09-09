@@ -5,9 +5,7 @@ defaults:
 task_name: reacher_hard
 exp_group: reacher_hard2
 
-expert_file: exp_local/${task_name}/1/snapshot.pt
-ct_file: ct_exp_local/${exp_group}/1/snapshot.pt
-video_dir: videos/${exp_group}/train/0
+
 xml_path: domain_xmls/reacher.xml
 
 enc_batch_size: 16
